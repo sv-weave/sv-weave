@@ -1,0 +1,8 @@
+sv-weave:
+  binding: "uvm_binding:UvmBinding"
+  plugin-path: [../../../examples/uvm]
+  packages: {include: [tx_pkg]}
+  weavers:
+  - {name: copy}
+  - {name: compare}
+  - {name: print}

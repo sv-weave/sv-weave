@@ -1,0 +1,5 @@
+sv-weave:
+  binding: reflib
+  registration: static
+  weavers:
+  - {name: t_build}

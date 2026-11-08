@@ -1,0 +1,5 @@
+sv-weave:
+  binding: reflib
+  sources: {files: [in/g.sv]}
+  weavers:
+  - {name: t_copy}

@@ -1,0 +1,6 @@
+sv-weave:
+  binding: reflib
+  plugin-path: [../../../examples/selector]
+  weavers:
+  - {name: "selector_weaver:SelectorWeaver"}
+  - {name: copy}

@@ -1,0 +1,34 @@
+package:
+  name: quickstart
+
+  tasks:
+  # The class library the design is written against: here the example reference
+  # library. With UVM this would be the UVM library task (hdlsim.vlt.SimLibUVM).
+  - name: lib
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      base: ../reflib
+      include: [reflib_pkg.sv]
+
+  - name: rtl
+    uses: std.FileSet
+    with:
+      type: systemVerilogSource
+      include: [pkt_pkg.sv, tb.sv]
+
+  - name: woven
+    uses: svweave.Weave
+    needs: [lib, rtl]
+    with:
+      config: sv-weave.yaml
+
+  - name: sim-img
+    uses: hdlsim.vlt.SimImage
+    needs: [woven]
+    with:
+      top: [tb]
+
+  - name: sim-run
+    uses: hdlsim.vlt.SimRun
+    needs: [sim-img]

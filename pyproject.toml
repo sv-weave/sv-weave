@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sv-weave"
+dynamic = ["version"]
+description = "Factory weaving for SystemVerilog class libraries"
+readme = "README.md"
+requires-python = ">=3.11"   # pyslang 12 requires 3.11
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [
+    {name = "Matthew Ballance", email = "matt.ballance@gmail.com"},
+]
+keywords = ["systemverilog", "uvm", "code-generation", "verification", "slang"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Software Development :: Code Generators",
+]
+dependencies = [
+    "pyslang>=12.1",
+    "pydantic>=2",
+    "pyyaml",
+]
+
+[project.urls]
+Documentation = "https://dvkit.org/sv-weave/sv-weave/"
+Source = "https://github.com/sv-weave/sv-weave"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-dfm",
+    "dv-flow-mgr",
+    "dv-flow-libhdlsim",
+]
+docs = [
+    "sphinx",
+    "sphinx-rtd-theme",
+    "sphinx-jsonschema",
+    "sphinx-dv-flow",
+]
+
+[project.scripts]
+sv-weave = "sv_weave.cli:main"
+
+[project.entry-points."dv_flow.mgr"]
+svweave = "sv_weave.dfm.__ext__"
+
+[tool.setuptools.dynamic]
+version = {attr = "sv_weave.__version__.__version__"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"sv_weave" = ["**/*.sv", "**/*.svh", "**/flow.dv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "sim: end-to-end weave + Verilator simulation (pytest-dfm)",
+    "perf: timing measurements; run only with -m perf",
+    "docs: Sphinx documentation build",
+    "xezim: needs the xezim simulator; skipped when it is not on PATH",
+]
+addopts = "-m 'not perf'"
+asyncio_default_fixture_loop_scope = "function"

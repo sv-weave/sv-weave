@@ -1,0 +1,13 @@
+sv-weave:
+  binding: reflib
+  extension-sets:
+    core: {}
+    debug.xcheck: {}
+  weavers:
+  - {name: copy}
+  - {name: xcheck, set: debug.xcheck}
+  profiles:
+    release: [core]
+    debug: [core, "debug.*"]
+  build-profiles: [release, debug]
+  default-profile: release

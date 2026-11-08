@@ -1,0 +1,6 @@
+sv-weave:
+  binding: reflib
+  sources: {files: [in/a.sv]}
+  weavers:
+  - {name: t_build, options: {tag: outer}}
+  - {name: t_build2, options: {tag: inner}}

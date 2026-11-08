@@ -1,0 +1,5 @@
+sv-weave:
+  binding: "reflib_binding:ReflibBinding"   # the example library's binding
+  plugin-path: [../reflib]
+  weavers:
+  - name: my_weavers:PrintFields

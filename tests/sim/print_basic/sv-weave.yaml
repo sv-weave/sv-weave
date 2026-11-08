@@ -1,0 +1,6 @@
+sv-weave:
+  binding: reflib
+  weavers:
+  - {name: copy}
+  - {name: compare}
+  - {name: print}

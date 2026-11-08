@@ -1,0 +1,155 @@
+"""Design-wide weaving (P7): on_design, DesignCtx, aggregate placement, and the selector
+example (examples/selector/)."""
+import os
+import textwrap
+
+import pytest
+
+from sv_weave import plugin
+from sv_weave.config import parse_config
+from sv_weave.diag import SvWeaveError
+from sv_weave.filelist import SourceSpec
+from sv_weave.run import run
+
+SRC = """
+package pa;
+  import reflib_pkg::*;
+  class A extends ref_object;
+    virtual function void build(); endfunction
+  endclass
+endpackage
+package pb;
+  import reflib_pkg::*;
+  class B extends ref_object;
+    virtual function void build(); endfunction
+  endclass
+endpackage
+"""
+
+
+EXAMPLE = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "examples",
+                                       "selector"))
+
+
+def weave(yaml_body, src=SRC):
+    cfg = parse_config("sv-weave:\n  binding: reflib\n" + textwrap.indent(textwrap.dedent(yaml_body), "  "))
+    spec = SourceSpec(files=[os.path.join(EXAMPLE, "select_pkg.sv")])
+    return run(cfg, spec=spec, texts=[("p.sv", src)], write=False)
+
+
+SELECTOR = '{name: "selector_weaver:SelectorWeaver"}'
+PLUGIN_PATH = "plugin-path: [%s]\n" % EXAMPLE
+
+
+class _Design(plugin.Weaver):
+    name = "t_design"
+    fn = None
+
+    def subscribe(self, bus):
+        bus.on_design(lambda d: type(self).fn(d))
+
+
+@pytest.fixture
+def design_weaver():
+    def make(fn):
+        cls = type("TDesign", (_Design,), {"fn": staticmethod(fn)})
+        plugin.register_weaver(cls)
+        return cls
+    yield make
+    plugin.unregister("t_design")
+
+
+def test_feature_of_contributes_to_woven_class(design_weaver):
+    def fn(d):
+        a = d.model.find_class("pa::A")
+        d.override_of(a, "build").body.add('$display("from design");')
+    design_weaver(fn)
+    res = weave("weavers: [{name: t_design}]\n")
+    assert [wc.name for wc in res.woven] == ["Woven_A__release"]
+    wc = res.woven[0]
+    assert ("t_design", "core") in wc.contributors
+    line = next(i for i, l in enumerate(res.file("pa_woven.sv").text.splitlines(), 1)
+                if "from design" in l)
+    assert res.file("pa_woven.sv").origin_at(line).contributor == "t_design"
+
+
+def test_aggregate_only_package_and_dedupe(design_weaver):
+    def fn(d):
+        d.add_item("pb", "typedef int __w_marker_t;")
+        d.add_registration("pb", '$display("registered pb");')
+    design_weaver(fn)
+    res = weave("""
+        weavers: [{name: t_design}]
+        profiles: {release: [core], debug: [core]}
+        """)
+    text = res.file("pb_woven.sv").text
+    assert text.count("typedef int __w_marker_t;") == 1      # once, not per profile
+    assert text.count('$display("registered pb");') == 1
+    assert "pb_woven::__register();" in res.extra_files["sv_weave_init.sv"]
+
+
+def test_woven_cycle_moves_to_gen_pkg(design_weaver, test_weavers):
+    def fn(d):
+        d.add_item("pa", "typedef int __w_a_t;", uses_woven=["pb"])
+        d.add_item("pb", "typedef int __w_b_t;", uses_woven=["pa"])
+    design_weaver(fn)
+    res = weave("""
+        weavers: [{name: t_build}, {name: t_design}]
+        """)
+    names = [p.name for p in res.packages]
+    assert names == ["pa_woven", "pb_woven", "sv_weave_gen_pkg"]
+    gen = res.file("sv_weave_gen_pkg.sv").text
+    assert "__w_a_t" in gen and "__w_b_t" in gen
+    assert "import pa_woven::*;" in gen and "import pb_woven::*;" in gen
+    assert "__w_a_t" not in res.file("pa_woven.sv").text
+    assert res.compile_order[-2:] == ["sv_weave_gen_pkg.sv", "sv_weave_init.sv"]
+
+
+def test_feature_of_non_target_is_error(design_weaver):
+    def fn(d):
+        d.feature_of(d.model.find_class("reflib_pkg::ref_object"), "copy")
+    design_weaver(fn)
+    with pytest.raises(SvWeaveError, match="is not a target class"):
+        weave("weavers: [{name: t_design}]\n")
+
+
+SEL = """
+package sp;
+  import reflib_pkg::*;
+  (* weave_select *) virtual class base extends ref_object; endclass
+  class c1 extends base; endclass
+  (* weave_weight = 2 *) class c2 extends base; endclass
+  virtual class ab extends base; endclass
+  class c3 extends ab; endclass
+  class P #(int W = 1) extends base; endclass
+  class u; P#(4) p; endclass
+endpackage
+"""
+
+
+def test_selector_entries():
+    res = weave(PLUGIN_PATH + "weavers: [%s]\n" % SELECTOR, src=SEL)
+    text = res.file("sp_woven.sv").text
+    for n in ("sp::c1", "sp::c2", "sp::c3", "sp::P#(4)"):
+        assert 'return "%s";' % n in text
+    assert 'return "sp::ab";' not in text
+    assert "return 2;" in text
+    assert text.count("select_pkg::select_types #(sp::base)::add(e);") == 4
+
+
+def test_selector_bases_option_and_bad_weight():
+    src = SEL.replace("(* weave_weight = 2 *)", '(* weave_weight = "heavy" *)')
+    with pytest.raises(SvWeaveError, match="weave_weight on sp::c2 must be a non-negative integer"):
+        weave(PLUGIN_PATH + "weavers: [%s]\n" % SELECTOR, src=src)
+    with pytest.raises(SvWeaveError, match="no class named 'nope'"):
+        weave(PLUGIN_PATH + 'weavers: [{name: "selector_weaver:SelectorWeaver", '
+              "options: {bases: [nope]}}]\n", src=SEL)
+
+
+def test_selector_needs_alloc():
+    with pytest.raises(SvWeaveError, match="rand-safety: 'new'|allow_alloc"):
+        weave(PLUGIN_PATH + """
+extension-sets: {core: {}, sel: {}}
+weavers: [{name: "selector_weaver:SelectorWeaver", set: sel}]
+profiles: {release: [core, sel]}
+""", src=SEL)

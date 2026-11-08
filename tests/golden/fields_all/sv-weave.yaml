@@ -1,0 +1,7 @@
+sv-weave:
+  binding: reflib
+  sources: {files: [in/f.sv]}
+  weavers:
+  - {name: copy}
+  - {name: compare}
+  - {name: print}

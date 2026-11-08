@@ -1,0 +1,24 @@
+package:
+  name: sv-weave
+  default-dep-set: dev
+
+  dep-sets:
+  - name: use
+    deps: 
+    - name: pyslang
+      src: pypi
+    - name: pydantic
+      src: pypi
+    - name: pyyaml
+      src: pypi
+  - name: default-dev
+    uses: dev
+  - name: dev
+    uses: use
+    deps:
+    - name: pytest
+      src: pypi
+    - name: sim-rtl-tools
+      src: ivpm.yaml
+      url: https://edapack.github.io/ivpm.yaml
+      dep-set: sim.rtl

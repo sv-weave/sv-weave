@@ -1,0 +1,53 @@
+package:
+  name: svweave
+  desc: sv-weave tasks for weaving SystemVerilog class libraries
+
+  tasks:
+  - name: Runtime
+    scope: export
+    desc: SV sources the listed bindings need
+    doc: |
+      Produces a systemVerilogSource FileSet with the SV sources each listed binding
+      needs ahead of the design (Binding.sv_runtime_files). sv-weave itself ships no
+      SV runtime; the class library comes from the design's own flow.
+    shell: pytask
+    run: sv_weave.dfm.tasks.Runtime
+    passthrough: all
+    consumes: none
+    with:
+      binding:
+        doc: Binding names, or module:Class references
+        type: list
+        value: []
+
+  - name: Weave
+    scope: export
+    desc: Weave the upstream SystemVerilog sources
+    doc: |
+      Runs the sv-weave pipeline over the upstream systemVerilogSource FileSets, in
+      order, and outputs them followed by a FileSet of the generated sources (woven
+      packages, then the init package) and a jsonManifest FileSet holding
+      weave-manifest.json. Diagnostics become markers at their source locations.
+    shell: pytask
+    run: sv_weave.dfm.tasks.Weave
+    # Reads the upstream sources (consumes) and also forwards them, ahead of the
+    # woven sources, so a SimImage that needs this task gets everything in order.
+    passthrough: all
+    consumes: all
+    with:
+      config:
+        doc: Path to sv-weave.yaml (relative to the flow's source directory)
+        type: str
+        value: ""
+      profiles:
+        doc: Profiles to build; overrides the config's build-profiles
+        type: list
+        value: []
+      binding:
+        doc: Binding names; overrides the config's binding
+        type: list
+        value: []
+      verify:
+        doc: Verification level (full, syntax, off); overrides the config's verify
+        type: str
+        value: ""
