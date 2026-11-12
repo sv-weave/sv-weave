@@ -51,3 +51,7 @@ package:
         doc: Verification level (full, syntax, off); overrides the config's verify
         type: str
         value: ""
+      top:
+        doc: Top modules to elaborate; added to the config's sources.top
+        type: list
+        value: []

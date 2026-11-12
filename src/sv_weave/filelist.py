@@ -28,6 +28,10 @@ class SourceSpec:
     files: List[str] = dc.field(default_factory=list)
     incdirs: List[str] = dc.field(default_factory=list)
     defines: Dict[str, Optional[str]] = dc.field(default_factory=dict)
+    # Top modules to elaborate. Empty: slang's default, every uninstantiated
+    # module. Set it when the sources hold a module that cannot elaborate on
+    # its own (e.g. a default `type` parameter that is not a class).
+    tops: List[str] = dc.field(default_factory=list)
 
     def extend(self, other: "SourceSpec"):
         for f in other.files:
@@ -37,6 +41,9 @@ class SourceSpec:
             if d not in self.incdirs:
                 self.incdirs.append(d)
         self.defines.update(other.defines)
+        for t in other.tops:
+            if t not in self.tops:
+                self.tops.append(t)
 
 
 def _expand_env(tok: str, loc: SrcLoc) -> str:

@@ -79,7 +79,7 @@ def verify_syntax(res) -> VerifyResult:
 def verify_full(res) -> VerifyResult:
     loaded = res.loaded
     sm = loaded.source_manager
-    comp = A.Compilation()
+    comp = A.Compilation(loaded.bag) if loaded.bag is not None else A.Compilation()
     if loaded.file_tree is not None:
         comp.addSyntaxTree(loaded.file_tree)
     for name, t in loaded.text_trees:

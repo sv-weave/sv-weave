@@ -50,7 +50,10 @@ def slang_loc(sm: pyslang.SourceManager, sloc) -> Optional[SrcLoc]:
 def _pp_bag(spec: SourceSpec) -> pyslang.Bag:
     pp = P.PreprocessorOptions()
     pp.predefines = [k if v is None else "%s=%s" % (k, v) for k, v in spec.defines.items()]
-    return pyslang.Bag([pp])
+    opts = A.CompilationOptions()
+    if spec.tops:
+        opts.topModules = set(spec.tops)
+    return pyslang.Bag([pp, opts])
 
 
 def convert_diags(sm: pyslang.SourceManager, diags) -> List[Diag]:
@@ -93,7 +96,7 @@ def load(spec: SourceSpec,
     if not trees:
         raise error("no SystemVerilog sources given")
 
-    comp = A.Compilation()
+    comp = A.Compilation(bag)
     for t in trees:
         comp.addSyntaxTree(t)
     root = comp.getRoot()

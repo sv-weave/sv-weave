@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from .conftest import weave_sim, weave_task
+from .conftest import source_tasks, weave_sim, weave_task
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -55,6 +55,24 @@ def test_incremental(dvflow):
     assert status == 0
     assert out2.changed is False
     assert [os.stat(p).st_mtime_ns for p in paths] == mtimes
+
+
+def test_weave_top_param(dvflow, tmp_path):
+    """The Weave task's ``top`` names the modules slang elaborates."""
+    (tmp_path / "m.sv").write_text(
+        "module needs_class #(parameter type T = int); T h = null; endmodule\n"
+        "module stub_top; endmodule\n")
+
+    def weave(**params):
+        srcs = source_tasks(dvflow, case("factory_basic"), lib="lib_a")
+        srcs.append(dvflow.mkTask("std.FileSet", name="extra", type="systemVerilogSource",
+                                  base=str(tmp_path), include="m.sv"))
+        t = dvflow.mkTask("svweave.Weave", name="woven", needs=srcs,
+                          config=os.path.join(case("factory_basic"), "sv-weave.yaml"), **params)
+        return dvflow.runTask(t)[0]
+
+    assert weave() != 0
+    assert weave(top=["stub_top"]) == 0
 
 
 @pytest.mark.xezim

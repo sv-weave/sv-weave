@@ -33,3 +33,27 @@ def test_single_unit_macros_and_defines(tmp_path):
 def test_no_sources():
     with pytest.raises(SvWeaveError, match="no SystemVerilog sources"):
         load(SourceSpec())
+
+
+# A module that cannot elaborate with its defaults (a `type` parameter used as a
+# class) fails as an implicit top; naming the tops leaves it unelaborated.
+_TYPE_PARAM_MOD = """
+module needs_class #(parameter type T = int); T h = null; endmodule
+module stub_top; endmodule
+"""
+
+
+def test_implicit_top_elaborates_every_module():
+    with pytest.raises(SvWeaveError):
+        load(SourceSpec(), [("m.sv", _TYPE_PARAM_MOD)])
+
+
+def test_tops_limit_elaboration():
+    loaded = load(SourceSpec(tops=["stub_top"]), [("m.sv", _TYPE_PARAM_MOD)])
+    assert [i.name for i in loaded.root.topInstances] == ["stub_top"]
+
+
+def test_config_top(tmp_path):
+    from sv_weave.config import parse_config
+    cfg = parse_config("sv-weave:\n  sources:\n    top: [stub_top]\n", base_dir=str(tmp_path))
+    assert cfg.source_spec().tops == ["stub_top"]

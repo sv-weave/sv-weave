@@ -85,6 +85,7 @@ def _input_hash(spec: SourceSpec, texts, cfg: Config, plugins: Dict[str, str]) -
     parts.extend(texts)
     parts.append(("incdirs", json.dumps(spec.incdirs)))
     parts.append(("defines", json.dumps(spec.defines, sort_keys=True)))
+    parts.append(("tops", json.dumps(spec.tops)))
     parts.append(("config", cfg.model_dump_json(by_alias=True)))
     parts.append(("plugins", json.dumps(plugins, sort_keys=True)))
     parts.append(("sv-weave", __version__))

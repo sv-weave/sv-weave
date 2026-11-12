@@ -44,7 +44,11 @@ Keys
 
 ``sources``
     ``filelists`` (``-f`` format, see :doc:`cli`), ``files``, ``incdirs``,
-    ``defines``. Command-line and dv-flow sources are added after these.
+    ``defines``, ``top``. Command-line and dv-flow sources are added after these.
+    ``top`` lists the modules slang elaborates (``--top`` on the command line, the
+    ``top`` parameter of ``svweave.Weave``); by default every uninstantiated module is
+    a top. Set it when the sources hold a module that cannot elaborate on its own,
+    for example one whose ``type`` parameter defaults to a type that is not a class.
 ``packages``
     Globs selecting which user packages are woven. ``std``, ``uvm_pkg``, sv-weave's
     own packages and ``*_woven`` are never woven.

@@ -7,14 +7,14 @@ Command line
 Loads the design, builds the class model and runs target selection, without generating
 anything::
 
-    sv-weave list [-c sv-weave.yaml] [-b BINDING] [-f files.f] [-I DIR] [-D NAME[=VAL]] [FILE ...]
-                  [--targets | --classes] [--json] [--no-runtime]
+    sv-weave list [-c sv-weave.yaml] [-b BINDING] [-f files.f] [-I DIR] [-D NAME[=VAL]] [--top MODULE]
+                  [FILE ...] [--targets | --classes] [--json] [--no-runtime]
 
 Sources come from the config's ``sources`` section, from ``-f`` filelists and from
 files on the command line, in that order. SV that the binding needs (if any) is added
 ahead of them unless ``--no-runtime`` is given. ``-b BINDING`` sets the binding when
 there is no config. If no ``-c`` is given, ``./sv-weave.yaml`` is used when it
-exists.
+exists. ``--top MODULE`` (repeatable) adds a module to the config's ``sources.top``.
 
 ``--targets`` (the default)
     One line per target class: the class, its binding and its source location.

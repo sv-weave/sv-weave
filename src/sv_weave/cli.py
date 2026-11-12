@@ -17,6 +17,9 @@ def _add_source_args(p: argparse.ArgumentParser):
                    help="add an include directory (repeatable)")
     p.add_argument("-D", dest="defines", action="append", default=[], metavar="NAME[=VAL]",
                    help="add a define (repeatable)")
+    p.add_argument("--top", dest="tops", action="append", default=[], metavar="MODULE",
+                   help="elaborate MODULE as a top (repeatable; default: every "
+                        "uninstantiated module)")
     p.add_argument("-b", "--binding", action="append", default=[],
                    help="binding name or module:Class (repeatable; overrides the config)")
     p.add_argument("--no-runtime", action="store_true",
@@ -75,6 +78,7 @@ def _cli_spec(args):
     for d in args.defines:
         name, _, val = d.partition("=")
         spec.defines[name] = val if val else None
+    spec.extend(SourceSpec(tops=list(args.tops)))
     return spec
 
 

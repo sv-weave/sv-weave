@@ -34,6 +34,9 @@ class SourcesCfg(_Model):
     incdirs: List[str] = Field(default_factory=list, description="Include directories")
     defines: Dict[str, Union[str, int, None]] = Field(
         default_factory=dict, description="Preprocessor defines; null for a bare define")
+    top: List[str] = Field(default_factory=list,
+                           description="Top modules to elaborate (default: every "
+                                       "uninstantiated module)")
 
 
 class PackagesCfg(_Model):
@@ -175,6 +178,7 @@ class Config(_Model):
         spec.incdirs.extend(self.resolve(d) for d in self.sources.incdirs)
         for k, v in self.sources.defines.items():
             spec.defines[k] = None if v is None else str(v)
+        spec.tops.extend(t for t in self.sources.top if t not in spec.tops)
         return spec
 
 

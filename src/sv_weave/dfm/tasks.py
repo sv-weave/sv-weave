@@ -95,7 +95,9 @@ async def Weave(runner, input) -> TaskDataResult:
         old_hash = None
         if input.memento is not None:
             old_hash = input.memento.get("output_hash")
-        res = run(cfg, spec=_upstream_spec(input), out_dir=out_dir,
+        spec = _upstream_spec(input)
+        spec.extend(SourceSpec(tops=_list(getattr(p, "top", None))))
+        res = run(cfg, spec=spec, out_dir=out_dir,
                   verify=getattr(p, "verify", "") or None)
     except SvWeaveError as e:
         markers = [_marker(d) for d in e.diags] or [TaskMarker(msg=str(e), severity=SeverityE.Error)]

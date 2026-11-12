@@ -47,3 +47,16 @@ def test_list_reports_errors(tmp_path, capsys):
     assert cli.main(["list", "-b", "reflib", str(f)]) == 1
     err = capsys.readouterr().err
     assert "does not elaborate cleanly" in err and "bad.sv:1" in err
+
+
+def test_list_top(tmp_path, capsys):
+    """--top names the modules to elaborate; without it a module that cannot
+    elaborate on its own fails the load."""
+    f = tmp_path / "a.sv"
+    f.write_text(SRC + "module needs_class #(parameter type T = int); T h = null; endmodule\n"
+                 "module stub_top; endmodule\n")
+    assert cli.main(["list", "-b", "reflib", "--json", str(f)]) != 0
+    capsys.readouterr()
+    assert cli.main(["list", "-b", "reflib", "--json", "--top", "stub_top", str(f)]) == 0
+    rows = json.loads(capsys.readouterr().out)["targets"]
+    assert [r["class"] for r in rows] == ["a_pkg::A", "a_pkg::P#(8)", "a_pkg::Q"]
