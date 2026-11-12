@@ -95,7 +95,7 @@ into a `copy()` method. Weavers never hard-code a library's method signatures.
                                 │          must elaborate cleanly; rand-safety rules run
                                 │          on the woven AST, per extension set
                                 ▼
-                         8 Write   P_woven.sv per package, sv_weave_init.sv,
+                         8 Write   P_woven.sv per package, sv_weave_init_{pkg,m}.sv,
                                            weave-manifest.json, weave-report.md
 ```
 
@@ -514,7 +514,7 @@ or `--verify=` on the CLI:
 | File | Contents |
 |---|---|
 | `<P>_woven.sv` | `package <P>_woven; import sv_weave_pkg::*; import <P>::*; <binding imports>`, followed by woven classes and per-class registration. |
-| `sv_weave_init.sv` | `package sv_weave_init_pkg;` with `function automatic void sv_weave_init();`, which calls each `<P>_woven::__register()`. See §8.4. |
+| `sv_weave_init_pkg.sv`, `sv_weave_init_m.sv` | `package sv_weave_init_pkg;` with `function automatic void sv_weave_init();`, which calls each `<P>_woven::__register()`; and `module sv_weave_init_m`, which calls it at static initialisation. One declaration per file (Verilator DECLFILENAME); until 0.2 both were in `sv_weave_init.sv`. See §8.4. |
 | `sv_weave_rt.f`, `sv_weave.f` | Filelists. The runtime (`sv_weave_rt.f`: `sv_weave_pkg` and the binding runtime) must compile *before* the user's sources, and the generated code (`sv_weave.f`: woven packages, then init) *after* them, so one list cannot hold both. (Changed in P2; the draft had a single `sv_weave.f`.) |
 | `weave-manifest.json` | Machine-readable list of target → woven class per profile, specialisation hashes, weavers and sets applied, and diagnostics. dfm and the report both use it. |
 | `weave-report.md` | Human-readable view of the same (risk 3: "see what was woven"). |

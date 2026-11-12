@@ -26,8 +26,8 @@ of the design, if any. sv-weave ships no SV runtime; the class library (for exam
 Runs the sv-weave pipeline over the upstream ``systemVerilogSource`` and
 ``verilogSource`` FileSets, in order (their include directories and defines too).
 Outputs the upstream FileSets, then a ``systemVerilogSource`` FileSet of the generated
-sources (woven packages, then ``sv_weave_init.sv``), then a ``jsonManifest`` FileSet
-holding ``weave-manifest.json``.
+sources (woven packages, then ``sv_weave_init_pkg.sv`` and ``sv_weave_init_m.sv``),
+then a ``jsonManifest`` FileSet holding ``weave-manifest.json``.
 
 .. list-table::
    :header-rows: 1

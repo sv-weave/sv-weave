@@ -2,7 +2,7 @@
 
 sv-weave @VERSION@, API 0.1. Verify: full.
 
-1 target, 1 woven class, 2 generated files; 0 warnings, 0 errors.
+1 target, 1 woven class, 3 generated files; 0 warnings, 0 errors.
 
 ## Profiles
 

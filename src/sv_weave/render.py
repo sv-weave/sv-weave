@@ -5,7 +5,7 @@ woven line it occupies, and its ``Origin``. Verify uses it to point a diagnostic
 woven code back at the weaver that produced it.
 """
 import dataclasses as dc
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .__version__ import __version__
 from .weave.model import MethodSlot, Origin, SvFragment, WovenClass, WovenPackage
@@ -180,15 +180,16 @@ def render_file(name: str, frag: SvFragment) -> RenderedFile:
     return RenderedFile(name, e.text(), e.spans)
 
 
-INIT_FILE = "sv_weave_init.sv"
+# The init package and module, one per file (a file named after what it declares
+# keeps Verilator's DECLFILENAME quiet). In compile order.
+INIT_PKG_FILE = "sv_weave_init_pkg.sv"
+INIT_MOD_FILE = "sv_weave_init_m.sv"
+INIT_FILES = (INIT_PKG_FILE, INIT_MOD_FILE)
 
 
-def render_init(packages) -> str:
-    """``sv_weave_init_pkg`` and ``sv_weave_init_m`` (design §8.4).
-
-    ``sv_weave_init()`` calls every woven package's ``__register()``. Instantiating
-    ``sv_weave_init_m`` runs it from a static initialiser, before any ``initial``
-    block; a testbench can also call it itself."""
+def render_init_pkg(packages) -> str:
+    """``sv_weave_init_pkg`` (design §8.4): ``sv_weave_init()`` calls every woven
+    package's ``__register()``, in order."""
     e = Emitter()
     e.line(HEADER)
     e.line("package sv_weave_init_pkg;")
@@ -198,7 +199,7 @@ def render_init(packages) -> str:
     e.line("function automatic void sv_weave_init();")
     e.indent()
     for wp in packages:
-        e.line("%s::__register();" % wp.name)
+        e.line("%s::__register();" % (wp if isinstance(wp, str) else wp.name))
     e.dedent()
     e.line("endfunction : sv_weave_init")
     e.line()
@@ -211,21 +212,37 @@ def render_init(packages) -> str:
     e.dedent()
     e.line()
     e.line("endpackage : sv_weave_init_pkg")
-    e.line()
+    return e.text()
+
+
+def render_init_m() -> str:
+    """``sv_weave_init_m``: instantiating it runs ``sv_weave_init()`` from a static
+    initialiser, before any ``initial`` block."""
+    e = Emitter()
+    e.line(HEADER)
     e.line("// Instantiate once (or add as an extra top): registers at static initialisation.")
     e.line("module sv_weave_init_m;")
     e.indent()
+    e.line("/* verilator lint_off UNUSEDSIGNAL */")
     e.line("bit m_done = sv_weave_init_pkg::sv_weave_init_bit();")
+    e.line("/* verilator lint_on UNUSEDSIGNAL */")
     e.dedent()
     e.line("endmodule : sv_weave_init_m")
     return e.text()
+
+
+def render_init(packages) -> Dict[str, str]:
+    """The init files, ``{name: text}`` in compile order, registering ``packages``
+    (woven packages or their names). A testbench instantiates ``sv_weave_init_m`` or
+    calls ``sv_weave_init_pkg::sv_weave_init()`` itself."""
+    return {INIT_PKG_FILE: render_init_pkg(packages), INIT_MOD_FILE: render_init_m()}
 
 
 INIT_STUB_NAME = "<sv-weave init stub>"
 
 
 def init_stub() -> str:
-    """Load-time stand-in for sv_weave_init.sv. User code may instantiate
+    """Load-time stand-in for the init files. User code may instantiate
     sv_weave_init_m or call sv_weave_init_pkg::sv_weave_init() before anything has
     been generated; the stub has the same interface and no registrations."""
-    return render_init([])
+    return "".join(render_init([]).values())

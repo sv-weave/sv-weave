@@ -47,7 +47,8 @@ def test_incremental(dvflow):
     woven = [fs for fs in out.output if getattr(fs, "src", None) == "woven"
              and fs.filetype == "systemVerilogSource"][0]
     paths = [os.path.join(woven.basedir, f) for f in woven.files]
-    assert [os.path.basename(p) for p in paths] == ["a_pkg_woven.sv", "sv_weave_init.sv"]
+    assert [os.path.basename(p) for p in paths] == ["a_pkg_woven.sv", "sv_weave_init_pkg.sv",
+                                                      "sv_weave_init_m.sv"]
     mtimes = [os.stat(p).st_mtime_ns for p in paths]
 
     t2 = weave_task(dvflow, case("incremental"), lib="lib_a")

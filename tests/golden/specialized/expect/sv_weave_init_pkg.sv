@@ -12,8 +12,3 @@ package sv_weave_init_pkg;
   endfunction : sv_weave_init_bit
 
 endpackage : sv_weave_init_pkg
-
-// Instantiate once (or add as an extra top): registers at static initialisation.
-module sv_weave_init_m;
-  bit m_done = sv_weave_init_pkg::sv_weave_init_bit();
-endmodule : sv_weave_init_m

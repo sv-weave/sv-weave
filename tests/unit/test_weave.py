@@ -235,7 +235,7 @@ def test_writes_and_skips_unchanged(tmp_path):
     r2 = run(cfg, texts=[("p.sv", SRC)], out_dir=str(tmp_path))
     assert r2.changed == []
     assert [l.rsplit("/", 1)[1] for l in (tmp_path / "sv_weave.f").read_text().split()] == [
-        "p_woven.sv", "sv_weave_init.sv"]
+        "p_woven.sv", "sv_weave_init_pkg.sv", "sv_weave_init_m.sv"]
     # A package that is no longer woven is removed.
     cfg3 = parse_config("sv-weave:\n  binding: reflib\n  packages: {exclude: [p]}\n  weavers: [{name: t_build}]\n")
     run(cfg3, texts=[("p.sv", SRC)], out_dir=str(tmp_path))

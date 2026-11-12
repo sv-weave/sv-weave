@@ -17,7 +17,7 @@ from .diag import Diag, Severity, SvWeaveError
 from .filelist import SourceSpec
 from .frontend.loader import Loaded, load
 from .frontend.model import SvModel, build_model
-from .render import (INIT_FILE, INIT_STUB_NAME, RenderedFile, content_key, init_stub,
+from .render import (INIT_FILES, INIT_STUB_NAME, RenderedFile, content_key, init_stub,
                      register_items, render_file, render_init, render_package)
 from .report import build_manifest, manifest_text, render_report
 from .select import Selection, select
@@ -169,7 +169,7 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
         full.files[:0] = [f for f in rt if os.path.basename(f) not in user_names]
     res.input_hash = _input_hash(full, texts, cfg, res.plugin_versions)
     load_texts = list(texts)
-    if INIT_FILE not in {os.path.basename(f) for f in full.files}:
+    if not set(INIT_FILES) & {os.path.basename(f) for f in full.files}:
         load_texts.append((INIT_STUB_NAME, init_stub()))
     with _Timer(res, "load"):
         res.loaded = load(full, load_texts)
@@ -257,7 +257,7 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
         register_items(wp, stmts, cfg.registration == "static")
     for b in bindings.values():
         res.extra_files.update(b.init_files(res.packages, cfg))
-    res.extra_files[INIT_FILE] = render_init(res.packages)
+    res.extra_files.update(render_init(res.packages))
 
     # 6. Render.
     res.rendered = [render_package(wp) for wp in res.packages]
@@ -272,11 +272,13 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
         _stop(res.diags, "weaving failed")
     file_rendered = [render_file(n, wfiles[n]) for n in sorted(wfiles)]
     res.rendered += file_rendered
-    # Compile order: woven packages, binding extras, the init package, then the
-    # weavers' files (modules and interfaces that may import any woven package).
-    extras = sorted((k, v) for k, v in res.extra_files.items() if k != INIT_FILE)
+    # Compile order: woven packages, binding extras, the init package and module,
+    # then the weavers' files (modules and interfaces that may import any woven
+    # package).
+    extras = sorted((k, v) for k, v in res.extra_files.items() if k not in INIT_FILES)
+    inits = [(n, res.extra_files[n]) for n in INIT_FILES if n in res.extra_files]
     gen = ([(r.name, r.text) for r in res.rendered if r not in file_rendered] + extras
-           + [(INIT_FILE, res.extra_files[INIT_FILE])] + [(r.name, r.text) for r in file_rendered])
+           + inits + [(r.name, r.text) for r in file_rendered])
     res.output_hash = _hash(gen)
     res.compile_order = [name for name, _ in gen]
 

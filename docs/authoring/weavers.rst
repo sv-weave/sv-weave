@@ -255,7 +255,7 @@ profile, after every per-class handler and before the bindings' ``finalize``.
     A whole generated file, for code that is not package-level (a module, an
     interface). ``name`` is a plain file name ending in ``.sv``, ``.svh`` or ``.v``.
     The file is written next to the woven packages, listed in ``sv_weave.f`` after
-    them and after ``sv_weave_init.sv`` (so it may import any woven package), and
+    them and after the init files (so it may import any woven package), and
     verified with them; its diagnostics point back at the weaver. The same name added
     again with the same text is kept once; with different text, or a name sv-weave
     generates itself, it is an error.

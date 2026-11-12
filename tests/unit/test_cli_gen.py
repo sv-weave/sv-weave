@@ -22,11 +22,12 @@ def test_gen_and_report(tmp_path, capsys):
         "sv-weave:\n  binding: reflib\n  sources: {files: [a.sv]}\n  out_dir: out\n  weavers: [{name: t_build}]\n")
     assert cli.main(["gen", "-c", str(tmp_path / "sv-weave.yaml")]) == 0
     out = capsys.readouterr().out
-    assert "1 woven class in 1 package" in out and "6 files changed" in out
+    assert "1 woven class in 1 package" in out and "7 files changed" in out
     man = tmp_path / "out" / "weave-manifest.json"
     m = json.loads(man.read_text())
     assert m["targets"][0]["woven"]["release"]["name"] == "Woven_A__release"
-    assert m["files"]["compile_order"] == ["a_pkg_woven.sv", "sv_weave_init.sv"]
+    assert m["files"]["compile_order"] == ["a_pkg_woven.sv", "sv_weave_init_pkg.sv",
+                                           "sv_weave_init_m.sv"]
 
     assert cli.main(["gen", "-c", str(tmp_path / "sv-weave.yaml")]) == 0
     assert "0 files changed" in capsys.readouterr().out
