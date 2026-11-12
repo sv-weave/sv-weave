@@ -7,5 +7,8 @@ rules in design §10: a minor bump adds, a major bump breaks.
 from .__version__ import __version__
 
 from .api_version import API_VERSION
+from .frontend.decl import (SvDecl, SvDeclArg, SvDeclMember, SvDeclMethod,
+                            SvDeclProperty, SvDeclTypedef)
 
-__all__ = ["API_VERSION", "__version__"]
+__all__ = ["API_VERSION", "__version__", "SvDecl", "SvDeclArg", "SvDeclMember",
+           "SvDeclMethod", "SvDeclProperty", "SvDeclTypedef"]

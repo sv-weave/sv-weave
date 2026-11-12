@@ -92,6 +92,36 @@ The weave context
 ``w.warning(msg, loc)``, ``w.error(msg, loc)``
     Diagnostics. With ``strict: true`` in the config, warnings become errors.
 
+The declaration as written
+--------------------------
+
+The model gives resolved types. A weaver that copies code from the user's class
+(a method prototype, a typedef, a parameter list) needs the text as the user wrote
+it instead: ``cls.decl`` (on ``SvClass`` and ``SvGenericClass``; a specialisation
+gives its generic class's declaration) is an ``SvDecl``, built on first use from
+the class's syntax. Import the types from ``sv_weave.api``.
+
+``decl.name``, ``decl.is_interface``, ``decl.is_virtual``, ``decl.attrs``
+    The class name, ``interface class`` or ``virtual class``, and its attributes.
+``decl.header``, ``decl.param_names``, ``decl.params_ref``
+    The parameter port list as written (``""`` for none), the parameter names, and
+    ``#(P, T)`` passing them straight through.
+``decl.extends``, ``decl.implements``
+    The base class and interface classes as written.
+``decl.typedefs``, ``decl.typedef(name)``
+    ``SvDeclTypedef``: ``name``, ``type``, the whole ``text``, ``attrs``; for a
+    packed struct or union, ``struct_kind`` and ``members`` (``SvDeclMember``:
+    ``name``, ``type``, ``attrs``).
+``decl.methods``, ``decl.method(name)``
+    ``SvDeclMethod``: ``name``, ``kind`` (``function``/``task``), ``ret``, ``args``
+    (``SvDeclArg``: ``name``, ``dir``, ``type``, ``dims``, ``default``,
+    ``declare()``), ``qualifiers``, ``attrs``, ``inputs``, ``outputs`` and
+    ``prototype(name=None)``.
+``decl.properties``
+    ``SvDeclProperty``: ``name``, ``type``, ``attrs``, ``qualifiers``.
+
+Text is rebuilt from the tokens, so comments in the declaration are left out.
+
 Method slots
 ------------
 

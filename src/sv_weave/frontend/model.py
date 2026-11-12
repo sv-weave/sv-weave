@@ -121,6 +121,11 @@ class SvGenericClass:
     def __repr__(self):
         return "SvGenericClass(%s)" % self.qname
 
+    @property
+    def decl(self):
+        """The declaration as written (``frontend.decl.SvDecl``)."""
+        return _decl_of(self)
+
 
 @dc.dataclass(eq=False)
 class SvClass:
@@ -146,6 +151,14 @@ class SvClass:
     @property
     def is_specialization(self) -> bool:
         return self.generic is not None
+
+    @property
+    def decl(self):
+        """The declaration as written (``frontend.decl.SvDecl``); for a
+        specialisation, its generic class's declaration."""
+        if self.generic is not None:
+            return self.generic.decl
+        return _decl_of(self)
 
     def ancestors(self) -> List["SvClass"]:
         """Base classes in the model, nearest first."""
@@ -219,6 +232,15 @@ class SvClass:
                 if m.pure:
                     out.append(m)
         return out
+
+
+def _decl_of(obj):
+    d = obj.__dict__.get("_decl")
+    if d is None and obj.slang is not None:
+        from .decl import build_decl
+        d = build_decl(obj.slang.syntax)
+        obj.__dict__["_decl"] = d
+    return d
 
 
 def _name_matches(c: SvClass, name: str) -> bool:
