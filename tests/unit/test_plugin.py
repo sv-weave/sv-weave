@@ -29,7 +29,7 @@ def test_incompatible_weaver_refused():
         api = ">=1.0"
     plugin.register_weaver(Future)
     try:
-        with pytest.raises(SvWeaveError, match="needs sv-weave API >=1.0, but this sv-weave provides 0.1"):
+        with pytest.raises(SvWeaveError, match="needs sv-weave API >=1.0, but this sv-weave provides 0.2"):
             plugin.find(plugin.WEAVER_GROUP, "t_future")
     finally:
         plugin.unregister("t_future")
@@ -121,3 +121,9 @@ def test_fingerprint_override(tmp_path):
         def fingerprint(cls):
             return "abc"
     assert plugin.source_fingerprint(Own) == "abc"
+
+
+def test_default_range_matches_api_version():
+    """A plugin that keeps the default range loads with this sv-weave."""
+    assert plugin.api_compatible(plugin.Weaver.api)
+    assert plugin.api_compatible(plugin.Binding.api)

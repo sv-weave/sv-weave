@@ -1,6 +1,6 @@
 # sv-weave report
 
-sv-weave @VERSION@, API 0.1. Verify: full.
+sv-weave @VERSION@, API 0.2. Verify: full.
 
 2 targets, 2 woven classes, 3 generated files; 0 warnings, 0 errors.
 
