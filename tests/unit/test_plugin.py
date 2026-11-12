@@ -75,3 +75,49 @@ def test_module_reference(tmp_path):
         plugin.find(plugin.WEAVER_GROUP, "my_weavers_mod:NotOne", [str(tmp_path)])
     with pytest.raises(SvWeaveError, match="cannot load weaver 'no_such_mod:W'"):
         plugin.find(plugin.WEAVER_GROUP, "no_such_mod:W")
+
+
+def _weaver_pkg(root, name, helper_body="X = 1\n"):
+    """A weaver package ``name`` under ``root``: the weaver module and a helper."""
+    d = root / name
+    d.mkdir()
+    (d / "__init__.py").write_text("")
+    (d / "helper.py").write_text(helper_body)
+    (d / "weaver.py").write_text(
+        "from sv_weave import plugin\n"
+        "from sv_weave.match import has_method\n"
+        "from . import helper\n\n"
+        "class W(plugin.Weaver):\n"
+        "    name = '%s'\n"
+        "    version = '1.0'\n\n"
+        "    def subscribe(self, bus):\n"
+        "        bus.on(has_method('build'), self.weave)\n\n"
+        "    def weave(self, w):\n"
+        "        pass\n" % name)
+    return d
+
+
+def test_fingerprint_follows_source(tmp_path):
+    import os
+    d = _weaver_pkg(tmp_path, "fpw_follow")
+    cls = plugin.find(plugin.WEAVER_GROUP, "fpw_follow.weaver:W", [str(tmp_path)])
+    fp1 = plugin.source_fingerprint(cls)
+    assert fp1 and fp1 == plugin.source_fingerprint(cls)
+    # mtime alone: unchanged
+    st = os.stat(d / "helper.py")
+    os.utime(d / "helper.py", ns=(st.st_atime_ns, st.st_mtime_ns + 10**9))
+    assert plugin.source_fingerprint(cls) == fp1
+    # the helper's body: changed, though the version string is not
+    (d / "helper.py").write_text("X = 2\n")
+    assert plugin.source_fingerprint(cls) != fp1
+    assert cls.version == "1.0"
+
+
+def test_fingerprint_override(tmp_path):
+    class Own(plugin.Weaver):
+        name = "fpw_own"
+
+        @classmethod
+        def fingerprint(cls):
+            return "abc"
+    assert plugin.source_fingerprint(Own) == "abc"

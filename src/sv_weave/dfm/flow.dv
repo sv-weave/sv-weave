@@ -30,6 +30,9 @@ package:
       weave-manifest.json. Diagnostics become markers at their source locations.
     shell: pytask
     run: sv_weave.dfm.tasks.Weave
+    # Beyond dv-flow's own checks: the config file's content and the weavers' and
+    # bindings' source, through the input hash of the last run.
+    uptodate: sv_weave.dfm.tasks.WeaveUpToDate
     # Reads the upstream sources (consumes) and also forwards them, ahead of the
     # woven sources, so a SimImage that needs this task gets everything in order.
     passthrough: all

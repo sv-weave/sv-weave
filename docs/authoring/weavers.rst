@@ -43,6 +43,12 @@ Register it under the ``sv_weave.weavers`` entry point and list it in
 ``api`` is the range of the sv-weave contribution API the weaver works with. sv-weave
 refuses to load a weaver whose range excludes its own API version.
 
+A run's input hash, which decides whether ``svweave.Weave`` is up to date, covers each
+weaver's ``version`` and its source: every ``.py`` file of the weaver's top-level
+package (or its one module), read from disk. A weaver whose output depends on other
+code or on data files overrides the classmethod ``fingerprint()`` to return a digest
+of them (bindings likewise).
+
 The bus
 -------
 

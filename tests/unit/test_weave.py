@@ -278,3 +278,15 @@ def test_weaver_default_order():
         plugin.unregister("t_zouter")
     body = block(text_of(res), "function void build", "endfunction")
     assert body[1] == '$display("Z: pre build A");' and body[-2] == '$display("Z: post build A");'
+
+
+def test_input_hash_follows_weaver_source(tmp_path):
+    """An edited weaver changes the input hash even with its version unchanged."""
+    from .test_plugin import _weaver_pkg
+    d = _weaver_pkg(tmp_path, "fpw_run")
+    cfg = parse_config("sv-weave:\n  binding: reflib\n  weavers: [{name: 'fpw_run.weaver:W'}]\n",
+                       base_dir=str(tmp_path))
+    h1 = run(cfg, texts=[("p.sv", SRC)], write=False).input_hash
+    assert run(cfg, texts=[("p.sv", SRC)], write=False).input_hash == h1
+    (d / "helper.py").write_text("X = 2\n")
+    assert run(cfg, texts=[("p.sv", SRC)], write=False).input_hash != h1

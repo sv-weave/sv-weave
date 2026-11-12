@@ -9,7 +9,10 @@ Each plugin declares the contribution-API range it works with (``api``, for exam
 ``">=0.1,<0.2"``). A plugin whose range excludes ``API_VERSION`` is refused at load time.
 """
 import dataclasses as dc
+import hashlib
+import os
 import re
+import sys
 from importlib.metadata import entry_points
 from typing import Any, Dict, List, Optional, Sequence, Tuple, Type
 
@@ -41,6 +44,14 @@ class Weaver:
     def subscribe(self, bus) -> None:
         raise NotImplementedError
 
+    @classmethod
+    def fingerprint(cls) -> Optional[str]:
+        """A digest of everything this weaver's output depends on besides its
+        options, for the run's input hash. None (the default) hashes the source of
+        the weaver's top-level package (``source_fingerprint``). Override it when
+        the weaver reads code outside its package or data files."""
+        return None
+
 
 @dc.dataclass(frozen=True)
 class FeatureSpec:
@@ -71,6 +82,11 @@ class Binding:
 
     def __init__(self, options: Optional[Dict[str, Any]] = None):
         self.options: Dict[str, Any] = dict(options or {})
+
+    @classmethod
+    def fingerprint(cls) -> Optional[str]:
+        """As ``Weaver.fingerprint``."""
+        return None
 
     def features(self) -> Dict[str, FeatureSpec]:
         return {}
@@ -112,6 +128,75 @@ class Binding:
     def init_files(self, woven_pkgs, cfg) -> Dict[str, str]:
         """Extra generated files, as {file name: text}, e.g. the init package."""
         return {}
+
+
+# -- source fingerprints ----------------------------------------------------------
+
+def _hash_paths(paths: Sequence[str], memo: Optional[Dict] = None) -> str:
+    """sha256 over the bytes of every ``.py`` file in ``paths`` (directories are
+    walked, ``__pycache__`` skipped), in sorted order of path relative to its root.
+    Read from disk, so a module already imported in this process does not matter."""
+    key = tuple(paths)
+    if memo is not None and key in memo:
+        return memo[key]
+    files: List[Tuple[str, str]] = []
+    for root in paths:
+        if os.path.isfile(root):
+            files.append((os.path.basename(root), root))
+            continue
+        for d, dirs, names in os.walk(root):
+            dirs[:] = sorted(x for x in dirs if x != "__pycache__")
+            for n in names:
+                if n.endswith(".py"):
+                    full = os.path.join(d, n)
+                    files.append((os.path.relpath(full, root), full))
+    h = hashlib.sha256()
+    for rel, full in sorted(files):
+        h.update(rel.encode())
+        h.update(b"\0")
+        try:
+            with open(full, "rb") as fp:
+                h.update(fp.read())
+        except OSError:
+            h.update(b"<unreadable>")
+        h.update(b"\0")
+    out = h.hexdigest()
+    if memo is not None:
+        memo[key] = out
+    return out
+
+
+def module_fingerprint(module_name: str, memo: Optional[Dict] = None) -> str:
+    """The source digest of ``module_name``'s top-level package: every ``.py`` file
+    under its directory (or directories, for a namespace package), or its one file
+    for a top-level module. "" when it has no source on disk."""
+    import importlib
+    top = module_name.split(".")[0]
+    mod = sys.modules.get(top)
+    if mod is None:
+        try:
+            mod = importlib.import_module(top)
+        except ImportError:
+            return ""
+    paths = list(getattr(mod, "__path__", None) or [])
+    if not paths:
+        f = getattr(mod, "__file__", None)
+        paths = [f] if f else []
+    paths = [p for p in paths if os.path.exists(p)]
+    return _hash_paths(paths, memo) if paths else ""
+
+
+def source_fingerprint(cls: type, memo: Optional[Dict] = None) -> str:
+    """What the run's input hash records for a plugin class's code: its
+    ``fingerprint()`` if it gives one, else the digest of its top-level package's
+    source (``module_fingerprint``). A plugin's ``version`` string alone does not
+    change when its code does."""
+    fp = getattr(cls, "fingerprint", None)
+    if callable(fp):
+        v = fp()
+        if v is not None:
+            return str(v)
+    return module_fingerprint(cls.__module__, memo)
 
 
 # -- version ranges ---------------------------------------------------------------

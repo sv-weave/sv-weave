@@ -58,6 +58,70 @@ def test_incremental(dvflow):
     assert [os.stat(p).st_mtime_ns for p in paths] == mtimes
 
 
+def _weave_reasons(dvflow, cfg_path):
+    """Runs Weave over the incremental case with ``cfg_path``; returns (status,
+    output, the runner's verdicts for the Weave task: "run" or "uptodate")."""
+    srcs = source_tasks(dvflow, case("incremental"), lib="lib_a")
+    t = dvflow.mkTask("svweave.Weave", name="woven", needs=srcs, config=str(cfg_path))
+    reasons = []
+
+    def listener(task, reason):
+        if str(getattr(task, "name", "")).endswith("woven") and reason in ("run", "uptodate"):
+            reasons.append(reason)
+    status, out = dvflow.runTask(t, listener=listener)
+    return status, out, reasons
+
+
+def _edit_case(tmp_path, mod):
+    """A config in tmp_path using a weaver package ``mod`` there (a module plus a
+    helper it imports)."""
+    d = tmp_path / mod
+    d.mkdir()
+    (d / "__init__.py").write_text("")
+    (d / "helper.py").write_text("MSG = 'one'\n")
+    (d / "weaver.py").write_text(
+        "from sv_weave import plugin\n"
+        "from sv_weave.match import has_method\n"
+        "from . import helper\n\n"
+        "class W(plugin.Weaver):\n"
+        "    name = '%s'\n\n"
+        "    def subscribe(self, bus):\n"
+        "        bus.on(has_method('build'), self.weave)\n\n"
+        "    def weave(self, w):\n"
+        "        w.override('build').pre.add('$display(\"%%s\");' %% helper.MSG)\n" % mod)
+    cfg = tmp_path / "sv-weave.yaml"
+    cfg.write_text("sv-weave:\n  binding: reflib\n  weavers:\n  - {name: '%s.weaver:W'}\n"
+                   % mod)
+    return d, cfg
+
+
+def test_incremental_weaver_edit(dvflow, tmp_path):
+    """Editing a weaver's source re-runs Weave, though dv-flow sees no change."""
+    d, cfg = _edit_case(tmp_path, "edit_w1")
+    status, _, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["run"]
+    status, _, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["uptodate"]
+    (d / "helper.py").write_text("MSG = 'two'\n")
+    status, out, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["run"]
+
+
+def test_incremental_config_edit(dvflow, tmp_path):
+    """Editing sv-weave.yaml (the file the config param names) re-runs Weave."""
+    _, cfg = _edit_case(tmp_path, "edit_w2")
+    status, _, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["run"]
+    status, _, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["uptodate"]
+    cfg.write_text(cfg.read_text() + "  strict: true\n")
+    status, out, reasons = _weave_reasons(dvflow, cfg)
+    assert status == 0 and reasons == ["run"]
+    woven = [fs for fs in out.output if getattr(fs, "src", None) == "woven"
+             and fs.filetype == "jsonManifest"]
+    assert woven
+
+
 def test_weave_top_param(dvflow, tmp_path):
     """The Weave task's ``top`` names the modules slang elaborates."""
     (tmp_path / "m.sv").write_text(

@@ -45,10 +45,22 @@ then a ``jsonManifest`` FileSet holding ``weave-manifest.json``.
    * - ``binding``
      - config's ``binding``
      - Bindings to use.
+   * - ``verify``
+     - config's ``verify``
+     - Verification level: ``full``, ``syntax`` or ``off``.
+   * - ``top``
+     - none
+     - Top modules to elaborate, added to the config's ``sources.top``.
 
 Diagnostics become task markers at their source locations. When the generated output
 is unchanged from the previous run, the task reports ``changed=False`` and rewrites no
 file, so downstream builds stay up to date.
+
+The task is skipped as up to date only when, besides dv-flow's own checks (parameters,
+upstream FileSets, outputs present), the run's input hash still holds. That hash covers
+the content of the ``config`` file and the source of every weaver and binding the
+config names, and of sv-weave itself, so editing a weaver re-weaves even when its
+``version`` is unchanged.
 
 Registration
 ------------

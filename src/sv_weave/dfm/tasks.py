@@ -46,9 +46,9 @@ async def Runtime(runner, input) -> TaskDataResult:
     return TaskDataResult(changed=input.changed, output=output)
 
 
-def _upstream_spec(input) -> SourceSpec:
+def _upstream_spec(inputs) -> SourceSpec:
     spec = SourceSpec()
-    for fs in input.inputs:
+    for fs in inputs:
         if getattr(fs, "type", None) != "std.FileSet" or fs.filetype not in SV_TYPES:
             continue
         if fs.filetype == "systemVerilogInclude":
@@ -68,36 +68,69 @@ def _upstream_spec(input) -> SourceSpec:
     return spec
 
 
-async def Weave(runner, input) -> TaskDataResult:
+def _weave_config(p, srcdir):
+    """The Weave task's config: the ``config`` file (relative to the flow's source
+    directory), with the ``profiles`` and ``binding`` params applied."""
     from ..config import Config, load_config
+
+    if p.config:
+        path = p.config if os.path.isabs(p.config) else os.path.join(srcdir, p.config)
+        cfg = load_config(path)
+    else:
+        cfg = Config()
+    updates = {}
+    if _list(p.profiles):
+        updates["build_profiles"] = _list(p.profiles)
+        updates["default_profile"] = None
+    if _list(p.binding):
+        updates["binding"] = _list(p.binding)
+    if updates:
+        base = cfg.base_dir
+        cfg = Config.model_validate({**cfg.model_dump(by_alias=False), **updates})
+        cfg._base_dir = base
+    return cfg
+
+
+def _weave_spec(p, inputs) -> SourceSpec:
+    """The upstream sources plus the ``top`` param."""
+    spec = _upstream_spec(inputs)
+    spec.extend(SourceSpec(tops=_list(getattr(p, "top", None))))
+    return spec
+
+
+async def WeaveUpToDate(ctxt) -> bool:
+    """dv-flow up-to-date check for Weave, run after dv-flow's own (params, inputs,
+    outputs present). Up to date only if the input hash the last run stored still
+    holds: it also covers the config file's content and the weavers' and bindings'
+    source, which dv-flow does not see."""
+    try:
+        from ..run import input_hash, prepare
+
+        old = (ctxt.memento or {}).get("input_hash")
+        if not old:
+            return False
+        cfg = _weave_config(ctxt.params, ctxt.srcdir)
+        now = input_hash(prepare(cfg, _weave_spec(ctxt.params, ctxt.inputs)))
+        if now != old:
+            _log.info("svweave.Weave: inputs changed (config, plugin or sv-weave source)")
+        return now == old
+    except Exception as e:  # anything unexpected: re-run
+        _log.debug("svweave.Weave up-to-date check failed: %s", e)
+        return False
+
+
+async def Weave(runner, input) -> TaskDataResult:
     from ..run import run
 
     p = input.params
     markers = []
     try:
-        if p.config:
-            path = p.config if os.path.isabs(p.config) else os.path.join(input.srcdir, p.config)
-            cfg = load_config(path)
-        else:
-            cfg = Config()
-        updates = {}
-        if _list(p.profiles):
-            updates["build_profiles"] = _list(p.profiles)
-            updates["default_profile"] = None
-        if _list(p.binding):
-            updates["binding"] = _list(p.binding)
-        if updates:
-            base = cfg.base_dir
-            cfg = Config.model_validate({**cfg.model_dump(by_alias=False), **updates})
-            cfg._base_dir = base
-
+        cfg = _weave_config(p, input.srcdir)
         out_dir = os.path.join(input.rundir, "woven")
         old_hash = None
         if input.memento is not None:
             old_hash = input.memento.get("output_hash")
-        spec = _upstream_spec(input)
-        spec.extend(SourceSpec(tops=_list(getattr(p, "top", None))))
-        res = run(cfg, spec=spec, out_dir=out_dir,
+        res = run(cfg, spec=_weave_spec(p, input.inputs), out_dir=out_dir,
                   verify=getattr(p, "verify", "") or None)
     except SvWeaveError as e:
         markers = [_marker(d) for d in e.diags] or [TaskMarker(msg=str(e), severity=SeverityE.Error)]

@@ -77,7 +77,65 @@ def _hash(parts: Sequence[Tuple[str, str]]) -> str:
     return h.hexdigest()
 
 
-def _input_hash(spec: SourceSpec, texts, cfg: Config, plugins: Dict[str, str]) -> str:
+@dc.dataclass
+class Prepared:
+    """What a run needs before any SystemVerilog is read: plugins, the bus and the
+    full source spec. Cheap (no slang work), so an up-to-date check can build one."""
+    cfg: Config
+    spec: SourceSpec
+    bindings: Dict[str, plugin.Binding]
+    bus: Bus
+    runtime_files: List[str]
+    plugin_versions: Dict[str, str]
+    plugin_sources: Dict[str, str]
+    sv_weave_source: str
+
+
+def prepare(cfg: Config, spec: Optional[SourceSpec] = None,
+            add_runtime: bool = True) -> Prepared:
+    """Loads the bindings and weavers, subscribes the weavers, and builds the source
+    spec: the config's sources, then ``spec``, with the bindings' runtime files ahead
+    of them when ``add_runtime``."""
+    if not cfg.bindings:
+        raise SvWeaveError([Diag(Severity.ERROR, "no binding configured: set 'binding:' in "
+                                 "sv-weave.yaml (sv-weave has no built-in binding)")])
+    memo: Dict = {}
+    versions: Dict[str, str] = {}
+    sources: Dict[str, str] = {}
+    bindings = {}
+    for name in cfg.bindings:
+        bcls = plugin.find(plugin.BINDING_GROUP, name, cfg.plugin_dirs())
+        b = bcls()
+        bindings[b.name] = b
+        versions["binding:" + b.name] = b.version
+        sources["binding:" + b.name] = plugin.source_fingerprint(bcls, memo)
+    bus = Bus()
+    for i, wcfg in enumerate(cfg.weavers):
+        wcls = plugin.find(plugin.WEAVER_GROUP, wcfg.name, cfg.plugin_dirs())
+        versions["weaver:" + wcls.name] = wcls.version
+        sources["weaver:" + wcls.name] = plugin.source_fingerprint(wcls, memo)
+        bus.subscribe(wcls(wcfg.options), wcfg.set,
+                      wcfg.order if wcfg.order is not None else wcls.order, wcfg.match,
+                      where="weavers[%d].match" % i, before=wcfg.before, after=wcfg.after)
+
+    full = cfg.source_spec()
+    if spec is not None:
+        full.extend(spec)
+    rt: List[str] = []
+    for b in bindings.values():
+        rt.extend(f for f in b.sv_runtime_files() if f not in rt)
+    if add_runtime:
+        user_names = {os.path.basename(f) for f in full.files}
+        full.files[:0] = [f for f in rt if os.path.basename(f) not in user_names]
+    return Prepared(cfg, full, bindings, bus, rt, versions, sources,
+                    plugin.module_fingerprint(__name__, memo))
+
+
+def input_hash(prep: Prepared, texts: Sequence[Tuple[str, str]] = ()) -> str:
+    """The run's input hash: the sources' content, include directories, defines and
+    tops, the config, each plugin's version and source, and sv-weave's own version
+    and source. Equal hashes mean a run would produce the same output."""
+    spec = prep.spec
     parts = []
     for f in spec.files:
         with open(f) as fp:
@@ -86,9 +144,11 @@ def _input_hash(spec: SourceSpec, texts, cfg: Config, plugins: Dict[str, str]) -
     parts.append(("incdirs", json.dumps(spec.incdirs)))
     parts.append(("defines", json.dumps(spec.defines, sort_keys=True)))
     parts.append(("tops", json.dumps(spec.tops)))
-    parts.append(("config", cfg.model_dump_json(by_alias=True)))
+    parts.append(("config", prep.cfg.model_dump_json(by_alias=True)))
+    plugins = {k: {"version": v, "source": prep.plugin_sources.get(k, "")}
+               for k, v in prep.plugin_versions.items()}
     parts.append(("plugins", json.dumps(plugins, sort_keys=True)))
-    parts.append(("sv-weave", __version__))
+    parts.append(("sv-weave", "%s %s" % (__version__, prep.sv_weave_source)))
     return _hash(parts)
 
 
@@ -140,34 +200,13 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
                                  % level)])
 
     # Plugins first: bindings may add library sources (sv_runtime_files).
-    if not cfg.bindings:
-        raise SvWeaveError([Diag(Severity.ERROR, "no binding configured: set 'binding:' in "
-                                 "sv-weave.yaml (sv-weave has no built-in binding)")])
-    bindings = {}
-    for name in cfg.bindings:
-        b = plugin.find(plugin.BINDING_GROUP, name, cfg.plugin_dirs())()
-        bindings[b.name] = b
-        res.plugin_versions["binding:" + b.name] = b.version
-    bus = Bus()
-    for i, wcfg in enumerate(cfg.weavers):
-        wcls = plugin.find(plugin.WEAVER_GROUP, wcfg.name, cfg.plugin_dirs())
-        res.plugin_versions["weaver:" + wcls.name] = wcls.version
-        bus.subscribe(wcls(wcfg.options), wcfg.set,
-                      wcfg.order if wcfg.order is not None else wcls.order, wcfg.match,
-                      where="weavers[%d].match" % i, before=wcfg.before, after=wcfg.after)
+    prep = prepare(cfg, spec, add_runtime)
+    bindings, bus, full = prep.bindings, prep.bus, prep.spec
+    res.plugin_versions = dict(prep.plugin_versions)
+    res.runtime_files = rt = prep.runtime_files
 
     # 1-2. Load and model.
-    full = cfg.source_spec()
-    if spec is not None:
-        full.extend(spec)
-    rt: List[str] = []
-    for b in bindings.values():
-        rt.extend(f for f in b.sv_runtime_files() if f not in rt)
-    res.runtime_files = rt
-    if add_runtime:
-        user_names = {os.path.basename(f) for f in full.files}
-        full.files[:0] = [f for f in rt if os.path.basename(f) not in user_names]
-    res.input_hash = _input_hash(full, texts, cfg, res.plugin_versions)
+    res.input_hash = input_hash(prep, texts)
     load_texts = list(texts)
     if not set(INIT_FILES) & {os.path.basename(f) for f in full.files}:
         load_texts.append((INIT_STUB_NAME, init_stub()))
