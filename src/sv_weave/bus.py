@@ -96,11 +96,12 @@ class Bus:
         return bool(self.design_subs) or any(s.pred(cls) for s in self.subs)
 
     def dispatch(self, targets: Sequence, profiles: Sequence[str], profile_sets: Callable,
-                 bindings: Dict[str, Any], cfg, model, aggregates=None):
+                 bindings: Dict[str, Any], cfg, model, aggregates=None, files=None):
         """Runs every handler. Per profile: bindings' ``prepare`` and the weavers for
         each target, then the ``on_design`` handlers, then bindings' ``finalize`` for
         each target some weaver contributed to. Returns (woven classes, diagnostics);
-        design-handler package code collects in ``aggregates``."""
+        design-handler package code collects in ``aggregates``, whole files in
+        ``files``."""
         from .weave.design import DesignCtx
         diags: List[Diag] = []
         out: List[WovenClass] = []
@@ -125,7 +126,7 @@ class Bus:
                 if s.ext_set not in sets:
                     continue
                 d = DesignCtx(model, profile, s.ext_set, s.options, s.weaver, builders,
-                              bindings, aggregates, diags)
+                              bindings, aggregates, diags, files)
                 d._relations = (s.before, s.after)
                 try:
                     _call(s.handler, d, s.weaver, None, diags)

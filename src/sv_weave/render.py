@@ -172,6 +172,14 @@ def render_package(wpkg: WovenPackage) -> RenderedFile:
     return RenderedFile(wpkg.name + ".sv", e.text(), e.spans)
 
 
+def render_file(name: str, frag: SvFragment) -> RenderedFile:
+    """A weaver's whole file (``DesignCtx.add_file``): the header, then its text."""
+    e = Emitter()
+    e.line(HEADER)
+    e.frag(frag)
+    return RenderedFile(name, e.text(), e.spans)
+
+
 INIT_FILE = "sv_weave_init.sv"
 
 

@@ -18,7 +18,7 @@ from .filelist import SourceSpec
 from .frontend.loader import Loaded, load
 from .frontend.model import SvModel, build_model
 from .render import (INIT_FILE, INIT_STUB_NAME, RenderedFile, content_key, init_stub,
-                     register_items, render_init, render_package)
+                     register_items, render_file, render_init, render_package)
 from .report import build_manifest, manifest_text, render_report
 from .select import Selection, select
 from .weave.design import GEN_PKG, gen_package_cycles
@@ -182,8 +182,9 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
 
     # 4. Weave.
     aggregates: Dict = {}
+    wfiles: Dict = {}
     woven, diags = bus.dispatch(res.selection.targets, cfg.build_profiles, cfg.profile_sets,
-                                bindings, cfg, res.model, aggregates)
+                                bindings, cfg, res.model, aggregates, wfiles)
     res.diags = _dedup(res.diags + diags)
     _stop(res.diags, "weaving failed")
     t_order = {id(t.cls): i for i, t in enumerate(res.selection.targets)}
@@ -260,9 +261,22 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
 
     # 6. Render.
     res.rendered = [render_package(wp) for wp in res.packages]
-    # Compile order: woven packages, binding extras, then the init package last.
+    # Weaver files (DesignCtx.add_file) must not take a name sv-weave writes itself.
+    taken = {r.name for r in res.rendered} | set(res.extra_files) | {
+        WOVEN_FILELIST, RUNTIME_FILELIST, MANIFEST, REPORT}
+    clash = sorted(n for n in wfiles if n in taken)
+    if clash:
+        res.diags.append(Diag(Severity.ERROR, "add_file: %s clash%s with a file sv-weave "
+                              "generates" % (", ".join(clash), "es" if len(clash) == 1 else ""),
+                              None))
+        _stop(res.diags, "weaving failed")
+    file_rendered = [render_file(n, wfiles[n]) for n in sorted(wfiles)]
+    res.rendered += file_rendered
+    # Compile order: woven packages, binding extras, the init package, then the
+    # weavers' files (modules and interfaces that may import any woven package).
     extras = sorted((k, v) for k, v in res.extra_files.items() if k != INIT_FILE)
-    gen = [(r.name, r.text) for r in res.rendered] + extras + [(INIT_FILE, res.extra_files[INIT_FILE])]
+    gen = ([(r.name, r.text) for r in res.rendered if r not in file_rendered] + extras
+           + [(INIT_FILE, res.extra_files[INIT_FILE])] + [(r.name, r.text) for r in file_rendered])
     res.output_hash = _hash(gen)
     res.compile_order = [name for name, _ in gen]
 

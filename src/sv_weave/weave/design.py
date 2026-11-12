@@ -4,7 +4,9 @@ An ``on_design`` handler runs once per profile, after every per-class handler an
 before the bindings' ``finalize``. It sees the whole model and can:
 - contribute to a target's woven class (``feature_of``, ``override_of``);
 - add package-level code (``add_item``, ``add_class``) to ``<pkg>_woven``;
-- add registration statements to that package's ``__register()``.
+- add registration statements to that package's ``__register()``;
+- add a whole file (``add_file``), for code that is not package-level: a module or
+  an interface. Such files compile after every woven package, so they may import any.
 
 Aggregate code about a class ``T`` usually goes to ``T``'s package. Woven packages
 compile after every user package, so importing user packages from there is always
@@ -13,6 +15,7 @@ if that creates an import cycle between woven packages, the code moves to
 ``sv_weave_gen_pkg``, which compiles after all of them.
 """
 import dataclasses as dc
+import os
 from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 from ..diag import Diag, Severity, SrcLoc, SvWeaveError
@@ -35,7 +38,8 @@ class Aggregate:
 class DesignCtx:
     def __init__(self, model, profile: str, ext_set: str, options: Dict[str, Any],
                  weaver: str, builders: Dict[int, WovenClassBuilder], bindings: Dict[str, Any],
-                 aggregates: Dict[str, Aggregate], diags: List[Diag]):
+                 aggregates: Dict[str, Aggregate], diags: List[Diag],
+                 files: Optional[Dict[str, SvFragment]] = None):
         self.model = model
         self.profile = profile
         self.ext_set = ext_set
@@ -45,6 +49,7 @@ class DesignCtx:
         self._builders = builders
         self._aggregates = aggregates
         self._diags = diags
+        self._files = {} if files is None else files
         self._touched: List[WovenClassBuilder] = []
 
     # -- woven classes ---------------------------------------------------------------
@@ -109,6 +114,25 @@ class DesignCtx:
         a = self._agg(pkg)
         if stmt not in a.registrations:
             a.registrations.append(stmt)
+
+    # -- whole files -------------------------------------------------------------------
+    def add_file(self, name: str, text: str) -> None:
+        """A generated file ``name`` (a plain file name, e.g. ``axi4_mgr_xtor.sv``) with
+        ``text``, written next to the woven packages and compiled after them. The same
+        file added twice with the same text (for example by two profiles) is kept once;
+        different text under one name is an error."""
+        if not name or os.path.basename(name) != name or name.startswith("."):
+            raise self._error("add_file: '%s' is not a plain file name" % name)
+        if not name.endswith((".sv", ".svh", ".v")):
+            raise self._error("add_file: '%s' is not an SV file (.sv, .svh, .v)" % name)
+        prev = self._files.get(name)
+        if prev is not None:
+            if prev.text != text:
+                raise self._error("add_file: '%s' was already added (by %s) with different "
+                                  "text" % (name, prev.origin.contributor
+                                            if prev.origin is not None else "?"))
+            return
+        self._files[name] = SvFragment(text, self._origin())
 
     # -- diagnostics -----------------------------------------------------------------
     def warning(self, msg: str, loc: Optional[SrcLoc] = None):
