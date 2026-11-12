@@ -45,6 +45,8 @@ def build_manifest(res) -> Dict[str, Any]:
         "plugins": res.plugin_versions,
         "input_hash": res.input_hash,
         "output_hash": res.output_hash,
+        # Woven packages whose __register() an init calls, in order (svweave.Init).
+        "register": res.register,
         # A cache hit means this exact output already passed full verification; the
         # manifest records that, so it does not change between runs.
         "verify": "full" if res.verify_status == "cached" else res.verify_status,

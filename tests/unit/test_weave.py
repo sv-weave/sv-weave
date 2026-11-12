@@ -290,3 +290,30 @@ def test_input_hash_follows_weaver_source(tmp_path):
     assert run(cfg, texts=[("p.sv", SRC)], write=False).input_hash == h1
     (d / "helper.py").write_text("X = 2\n")
     assert run(cfg, texts=[("p.sv", SRC)], write=False).input_hash != h1
+
+
+def test_init_false_writes_no_init(tmp_path):
+    res = weave("init: false\nweavers: [{name: t_build}]\n")
+    assert res.compile_order == ["p_woven.sv"]
+    assert not any(n.startswith("sv_weave_init") for n in res.extra_files)
+    assert res.manifest["register"] == ["p_woven"]
+    res = weave("weavers: [{name: t_build}]\n")
+    assert res.compile_order == ["p_woven.sv", "sv_weave_init_pkg.sv", "sv_weave_init_m.sv"]
+    assert res.manifest["register"] == ["p_woven"]
+
+
+def test_generated_init_in_sources_is_error(tmp_path):
+    """A Weave over another run's output (init: true on both) would define the init
+    package twice."""
+    (tmp_path / "p.sv").write_text(SRC)
+    first = run(parse_config("sv-weave:\n  binding: reflib\n  weavers: [{name: t_build}]\n"),
+                spec=SourceSpec(files=[str(tmp_path / "p.sv")]), out_dir=str(tmp_path / "w1"))
+    spec = SourceSpec(files=[str(tmp_path / "p.sv")] + first.woven_files)
+    cfg = parse_config("sv-weave:\n  binding: reflib\n")
+    with pytest.raises(SvWeaveError, match="already hold a generated init.*init: false"):
+        run(cfg, spec=spec, texts=[("q.sv", "package q; endpackage\n")],
+            out_dir=str(tmp_path / "w2"))
+    cfg = parse_config("sv-weave:\n  binding: reflib\n  init: false\n")
+    res = run(cfg, spec=spec, texts=[("q.sv", "package q; endpackage\n")],
+              out_dir=str(tmp_path / "w2"))
+    assert res.compile_order == []

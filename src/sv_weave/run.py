@@ -13,11 +13,11 @@ from .__version__ import __version__
 from .bus import Bus
 from .check import check
 from .config import Config
-from .diag import Diag, Severity, SvWeaveError
+from .diag import Diag, Severity, SrcLoc, SvWeaveError
 from .filelist import SourceSpec
 from .frontend.loader import Loaded, load
 from .frontend.model import SvModel, build_model
-from .render import (INIT_FILES, INIT_STUB_NAME, RenderedFile, content_key, init_stub,
+from .render import (GENERATED_PREFIX, INIT_FILES, INIT_STUB_NAME, LEGACY_INIT_FILE, RenderedFile, content_key, init_stub,
                      register_items, render_file, render_init, render_package)
 from .report import build_manifest, manifest_text, render_report
 from .select import Selection, select
@@ -50,6 +50,7 @@ class RunResult:
     plugin_versions: Dict[str, str] = dc.field(default_factory=dict)
     input_hash: str = ""
     output_hash: str = ""
+    register: List[str] = dc.field(default_factory=list)   # woven packages, in init order
     verify_status: str = "not run"
     verified: Optional[Dict] = None
     manifest: Dict = dc.field(default_factory=dict)
@@ -152,6 +153,24 @@ def input_hash(prep: Prepared, texts: Sequence[Tuple[str, str]] = ()) -> str:
     return _hash(parts)
 
 
+def _generated_init(files: Sequence[str], out_dir: str) -> Optional[str]:
+    """The first source file that is an init file an sv-weave run generated (by name
+    and header), other than this run's own output."""
+    for f in files:
+        if os.path.basename(f) not in INIT_FILES + (LEGACY_INIT_FILE,):
+            continue
+        if os.path.dirname(os.path.abspath(f)) == out_dir:
+            continue
+        try:
+            with open(f) as fp:
+                first = fp.readline()
+        except OSError:
+            continue
+        if first.startswith(GENERATED_PREFIX):
+            return f
+    return None
+
+
 def _dedup(diags: List[Diag]) -> List[Diag]:
     seen, out = set(), []
     for d in diags:
@@ -210,6 +229,14 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
     load_texts = list(texts)
     if not set(INIT_FILES) & {os.path.basename(f) for f in full.files}:
         load_texts.append((INIT_STUB_NAME, init_stub()))
+    if cfg.init:
+        prior = _generated_init(full.files, out_dir)
+        if prior:
+            raise SvWeaveError([Diag(
+                Severity.ERROR, "the sources already hold a generated init file (%s), "
+                "from another sv-weave run; two init packages cannot share an image. Set "
+                "'init: false' on each Weave and add one svweave.Init after them" % prior,
+                SrcLoc(prior, 1))])
     with _Timer(res, "load"):
         res.loaded = load(full, load_texts)
     with _Timer(res, "model"):
@@ -296,7 +323,9 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
         register_items(wp, stmts, cfg.registration == "static")
     for b in bindings.values():
         res.extra_files.update(b.init_files(res.packages, cfg))
-    res.extra_files.update(render_init(res.packages))
+    res.register = [wp.name for wp in res.packages]
+    if cfg.init:
+        res.extra_files.update(render_init(res.register))
 
     # 6. Render.
     res.rendered = [render_package(wp) for wp in res.packages]

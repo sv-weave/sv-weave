@@ -84,6 +84,8 @@ def _weave_config(p, srcdir):
         updates["default_profile"] = None
     if _list(p.binding):
         updates["binding"] = _list(p.binding)
+    if not getattr(p, "init", True) and cfg.init:
+        updates["init"] = False
     if updates:
         base = cfg.base_dir
         cfg = Config.model_validate({**cfg.model_dump(by_alias=False), **updates})
@@ -145,3 +147,46 @@ async def Weave(runner, input) -> TaskDataResult:
     return TaskDataResult(
         status=0, changed=changed, output=[woven, manifest], markers=markers,
         memento={"output_hash": res.output_hash, "input_hash": res.input_hash})
+
+
+async def Init(runner, input) -> TaskDataResult:
+    """One init for several Weave tasks: reads the ``register`` list of each upstream
+    jsonManifest (in input order, each package once) and writes the init package and
+    module."""
+    import json
+
+    from ..render import INIT_FILES, render_init
+    from ..write import write_if_changed
+
+    names, errs = [], []
+    for fs in input.inputs:
+        if getattr(fs, "type", None) != "std.FileSet" or fs.filetype != "jsonManifest":
+            continue
+        for f in fs.files:
+            path = f if os.path.isabs(f) else os.path.join(fs.basedir, f)
+            try:
+                with open(path) as fp:
+                    m = json.load(fp)
+            except (OSError, ValueError) as e:
+                errs.append("cannot read %s: %s" % (path, e))
+                continue
+            if "register" not in m:
+                errs.append("%s has no 'register' list (from sv-weave before 0.2?)" % path)
+                continue
+            own = [n for n in m.get("files", {}).get("compile_order", []) if n in INIT_FILES]
+            if own:
+                errs.append("%s: that Weave writes its own init (%s); set 'init: false' on "
+                            "it" % (path, ", ".join(own)))
+                continue
+            names.extend(n for n in m["register"] if n not in names)
+    if errs:
+        return TaskDataResult(status=1, changed=True, output=[],
+                              markers=[TaskMarker(msg=e, severity=SeverityE.Error) for e in errs])
+    out_dir = os.path.join(input.rundir, "init")
+    changed = False
+    for name, text in render_init(names).items():
+        changed = write_if_changed(os.path.join(out_dir, name), text) or changed
+    init = FileSet(filetype="systemVerilogSource", src=input.name, basedir=out_dir,
+                   files=list(INIT_FILES))
+    return TaskDataResult(status=0, changed=input.changed or changed, output=[init],
+                          memento={"register": names})

@@ -234,3 +234,13 @@ endpackage
     assert res.verify_status == "full"
     wp = next(p for p in res.packages if p.name == "pc_woven")
     assert wp.imports[:3] == ["pc", "reflib_pkg", "pdefs"]
+
+
+def test_register_lists_gen_pkg_last(design_weaver, test_weavers):
+    def fn(d):
+        d.add_item("pa", "typedef int __w_a_t;", uses_woven=["pb"])
+        d.add_item("pb", "typedef int __w_b_t;", uses_woven=["pa"])
+    design_weaver(fn)
+    res = weave("weavers: [{name: t_build}, {name: t_design}]\ninit: false\n")
+    assert res.manifest["register"] == ["pa_woven", "pb_woven", "sv_weave_gen_pkg"]
+    assert res.compile_order[-1] == "sv_weave_gen_pkg.sv"

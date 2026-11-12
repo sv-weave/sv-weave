@@ -58,3 +58,23 @@ package:
         doc: Top modules to elaborate; added to the config's sources.top
         type: list
         value: []
+      init:
+        doc: |
+          false: write no init files, as the config's init false (the files are
+          written only when both are true). Set it on Weave tasks whose outputs
+          share an image, and add one svweave.Init after them
+        type: bool
+        value: true
+
+  - name: Init
+    scope: export
+    desc: One init package for several Weave tasks
+    doc: |
+      Reads the jsonManifest FileSets of the upstream svweave.Weave tasks (each with
+      init false) and writes one sv_weave_init_pkg.sv and sv_weave_init_m.sv that
+      register every woven package they list, in input order. Outputs the upstream
+      FileSets followed by a systemVerilogSource FileSet of the two files.
+    shell: pytask
+    run: sv_weave.dfm.tasks.Init
+    passthrough: all
+    consumes: all

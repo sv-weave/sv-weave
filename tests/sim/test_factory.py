@@ -3,7 +3,7 @@ import os
 
 import pytest
 
-from .conftest import source_tasks, weave_sim, weave_task
+from .conftest import run_sim, source_tasks, weave_sim, weave_task
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
@@ -120,6 +120,42 @@ def test_incremental_config_edit(dvflow, tmp_path):
     woven = [fs for fs in out.output if getattr(fs, "src", None) == "woven"
              and fs.filetype == "jsonManifest"]
     assert woven
+
+
+def test_two_weaves_one_init(dvflow):
+    """Two Weave tasks with init false (the task param) and one svweave.Init feed one
+    image; both libraries' factories return their woven classes."""
+    d = case("two_weaves_one_init")
+    cfg = os.path.join(d, "sv-weave.yaml")
+    check = dvflow.mkTask("std.FileSet", name="check_sv", type="systemVerilogSource",
+                          base=os.path.join(HERE, "sv"), include="check_pkg.sv")
+    lib_a = dvflow.mkTask("std.FileSet", name="lib_a", type="systemVerilogSource",
+                          base=case("lib_a"), include="*.sv")
+    lib_c = dvflow.mkTask("std.FileSet", name="lib_c", type="systemVerilogSource",
+                          base=case("lib_c"), include="*.sv")
+    w1 = dvflow.mkTask("svweave.Weave", name="woven_a", needs=[check, lib_a], config=cfg,
+                       init=False)
+    w2 = dvflow.mkTask("svweave.Weave", name="woven_c", needs=[lib_c], config=cfg, init=False)
+    init = dvflow.mkTask("svweave.Init", name="init", needs=[w1, w2])
+    tb = dvflow.mkTask("std.FileSet", name="tb", type="systemVerilogSource", base=d,
+                       include="tb.sv")
+    rt = dvflow.mkTask("svweave.Runtime", name="rt", binding=["reflib"])
+    r = run_sim(dvflow, [rt, init, tb])
+    r.assert_pass()
+    with open(os.path.join(str(dvflow.tmpdir), "init", "init", "sv_weave_init_pkg.sv")) as fp:
+        text = fp.read()
+    assert "a_pkg_woven::__register();" in text and "c_pkg_woven::__register();" in text
+
+
+def test_init_rejects_weave_with_own_init(dvflow):
+    """svweave.Init over a Weave that writes its own init is an error."""
+    lib_a = dvflow.mkTask("std.FileSet", name="lib_a", type="systemVerilogSource",
+                          base=case("lib_a"), include="*.sv")
+    w = dvflow.mkTask("svweave.Weave", name="woven", needs=[lib_a],
+                      config=os.path.join(case("two_weaves_one_init"), "sv-weave.yaml"))
+    init = dvflow.mkTask("svweave.Init", name="init", needs=[w])
+    status, _ = dvflow.runTask(init)
+    assert status != 0
 
 
 def test_weave_top_param(dvflow, tmp_path):

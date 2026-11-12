@@ -78,6 +78,9 @@ class Config(_Model):
     out_dir: str = Field("sv-weave-out", description="Output directory")
     registration: Literal["explicit", "static"] = Field(
         "explicit", description="How woven classes are registered (see design §8.4)")
+    init: bool = Field(True, description="Write the init files (sv_weave_init_pkg.sv, "
+                                         "sv_weave_init_m.sv); false when svweave.Init "
+                                         "writes one init for several Weave tasks")
     strict: bool = Field(False, description="Treat warnings as errors")
     verify: Literal["full", "syntax", "off"] = Field("full", description="Verification level")
     extension_sets: Dict[str, ExtensionSetCfg] = Field(

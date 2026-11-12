@@ -59,6 +59,10 @@ Keys
     ``explicit``: the design installs registration with ``sv_weave_init_m`` or a call
     to ``sv_weave_init_pkg::sv_weave_init()``. ``static``: each woven package also
     registers itself from a static initialiser.
+``init``
+    ``true`` (the default) writes the init files, ``sv_weave_init_pkg.sv`` and
+    ``sv_weave_init_m.sv``. ``false`` writes none; the manifest's ``register`` list
+    still names the woven packages, for ``svweave.Init`` (see :doc:`dvflow`).
 ``strict``
     Makes warnings errors, for example a ``local`` field a weaver cannot reach.
 ``verify``
