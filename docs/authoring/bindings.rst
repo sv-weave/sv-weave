@@ -49,7 +49,8 @@ What a binding provides
     classes and ``__register()``. Each woven package must define ``__register()``;
     the generated ``sv_weave_init()`` calls it.
 ``imports()``
-    Packages the woven package imports, besides the user package (UVM: ``uvm_pkg``).
+    Packages the woven package imports, besides the user package and the packages
+    the user package wildcard-imports (UVM: ``uvm_pkg``).
 ``preamble()``
     Lines before ``package`` in each woven file (UVM: the ``uvm_macros.svh`` include).
 ``create_expr(cls, inst)``

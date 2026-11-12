@@ -243,8 +243,9 @@ profile, after every per-class handler and before the bindings' ``finalize``.
     target (when any design handler is configured, every class a binding claims is
     one).
 ``d.add_item(pkg, text, imports=(), uses_woven=())``, ``d.add_class(...)``
-    Package-level code in ``<pkg>_woven``. ``imports`` lists user packages the code
-    needs. ``uses_woven`` lists user packages whose *woven* package it references; if
+    Package-level code in ``<pkg>_woven``. The woven package already imports ``pkg``
+    and every package ``pkg`` wildcard-imports; ``imports`` lists further user packages
+    the code needs. ``uses_woven`` lists user packages whose *woven* package it references; if
     that makes woven packages import each other in a cycle, the code moves to
     ``sv_weave_gen_pkg``, which compiles after all of them. Identical text added for
     several profiles is kept once.

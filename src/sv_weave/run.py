@@ -211,8 +211,12 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
     # Group into packages, in model package order; design-handler code (aggregates)
     # joins its package, or sv_weave_gen_pkg when woven packages would import each
     # other in a cycle.
+    # A woven package sees what its user package sees: the user package itself and
+    # the packages it wildcard-imports (woven code is written against that scope).
     def new_pkg(name: str, user_pkg: Optional[str]) -> WovenPackage:
         imports = [user_pkg] if user_pkg else []
+        up = res.model.package(user_pkg) if user_pkg else None
+        imports.extend(i for i in (up.imports if up else []) if i not in imports)
         preamble: List[str] = []
         for b in bindings.values():
             imports.extend(i for i in b.imports() if i not in imports)

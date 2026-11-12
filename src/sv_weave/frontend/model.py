@@ -257,6 +257,7 @@ class SvPackage:
     loc: Optional[SrcLoc]
     classes: List[SvClass] = dc.field(default_factory=list)
     generics: List[SvGenericClass] = dc.field(default_factory=list)
+    imports: List[str] = dc.field(default_factory=list)   # wildcard imports (p::*), in order
     slang: Any = dc.field(default=None, repr=False)
 
     def __repr__(self):
@@ -366,7 +367,10 @@ class ModelBuilder:
             self.model._packages[pkg.name] = sp
             self._keep.append(pkg)
             for m in pkg:
-                if isinstance(m, A.ClassType):
+                if m.kind == SK.WildcardImport:
+                    if m.packageName not in sp.imports:
+                        sp.imports.append(m.packageName)
+                elif isinstance(m, A.ClassType):
                     sp.classes.append(self.class_for(m))
                 elif m.kind == SK.GenericClassDef:
                     sp.generics.append(self.generic_for(m))

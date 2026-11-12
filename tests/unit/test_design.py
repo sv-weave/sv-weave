@@ -153,3 +153,28 @@ extension-sets: {core: {}, sel: {}}
 weavers: [{name: "selector_weaver:SelectorWeaver", set: sel}]
 profiles: {release: [core, sel]}
 """, src=SEL)
+
+
+def test_woven_package_repeats_user_imports(design_weaver):
+    """Woven code sees what the user package sees: the woven package repeats its
+    wildcard imports, so a name from an imported package resolves there too."""
+    src = SRC + """
+package pdefs;
+  typedef int pd_t;
+endpackage
+package pc;
+  import reflib_pkg::*;
+  import pdefs::*;
+  class C extends ref_object;
+    pd_t v;
+    virtual function void build(); endfunction
+  endclass
+endpackage
+"""
+    def fn(d):
+        d.add_item("pc", "typedef pd_t __w_pd_alias_t;")
+    design_weaver(fn)
+    res = weave("weavers: [{name: t_design}]\n", src=src)
+    assert res.verify_status == "full"
+    wp = next(p for p in res.packages if p.name == "pc_woven")
+    assert wp.imports[:3] == ["pc", "reflib_pkg", "pdefs"]
