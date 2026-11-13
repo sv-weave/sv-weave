@@ -132,8 +132,12 @@ class Binding:
 
 # -- source fingerprints ----------------------------------------------------------
 
+TEMPLATE_EXTS = (".j2", ".jinja")
+
+
 def _hash_paths(paths: Sequence[str], memo: Optional[Dict] = None) -> str:
-    """sha256 over the bytes of every ``.py`` file in ``paths`` (directories are
+    """sha256 over the bytes of every ``.py`` file, and every Jinja template (``.j2``,
+    ``.jinja``, which ``render`` reads), in ``paths`` (directories are
     walked, ``__pycache__`` skipped), in sorted order of path relative to its root.
     Read from disk, so a module already imported in this process does not matter."""
     key = tuple(paths)
@@ -147,7 +151,7 @@ def _hash_paths(paths: Sequence[str], memo: Optional[Dict] = None) -> str:
         for d, dirs, names in os.walk(root):
             dirs[:] = sorted(x for x in dirs if x != "__pycache__")
             for n in names:
-                if n.endswith(".py"):
+                if n.endswith((".py",) + TEMPLATE_EXTS):
                     full = os.path.join(d, n)
                     files.append((os.path.relpath(full, root), full))
     h = hashlib.sha256()

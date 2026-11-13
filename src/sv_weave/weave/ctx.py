@@ -7,13 +7,14 @@ builder; everything it adds is stamped with its ``Origin``.
 import contextlib
 import hashlib
 import re
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..diag import Diag, Severity, SrcLoc, SvWeaveError
 from ..frontend.model import SvClass, SvMethod, SvField, Visibility
 from .model import (ClassItem, FieldDecl, MethodSig, MethodSlot, Origin, SvFragment,
                     WovenClass, call_site)
 from .svhelpers import SvHelpers
+from .templates import SvText, render as _render
 
 
 def spec_hash(qname: str) -> str:
@@ -132,8 +133,9 @@ class WeaveCtx:
     """What a weaver's handler receives (design §6.2)."""
 
     def __init__(self, builder: WovenClassBuilder, ext_set: Optional[str] = None,
-                 options: Optional[Dict[str, Any]] = None):
+                 options: Optional[Dict[str, Any]] = None, templates: Sequence[str] = ()):
         self._b = builder
+        self._templates = tuple(templates)
         self.ext_set = ext_set
         self.options: Dict[str, Any] = dict(options or {})
         self.sv = SvHelpers(self)
@@ -240,11 +242,18 @@ class WeaveCtx:
             raise self._error("add_field cannot add rand/randc fields: %s" % text)
         if not text.endswith(";"):
             text += ";"
-        self.woven.fields.append(FieldDecl(text, self._b.origin_now()))
+        self.woven.fields.append(FieldDecl(text, _for_text(self._b.origin_now(), decl)))
 
     def add_item(self, text: str) -> None:
         """Any class item no slot covers (a typedef, a constraint, a helper function)."""
-        self.woven.items.append(ClassItem(SvFragment(text, self._b.origin_now())))
+        self.woven.items.append(ClassItem(SvFragment(text, _for_text(self._b.origin_now(),
+                                                                     text))))
+
+    def render(self, template: str, /, **ctx) -> SvText:
+        """Renders a Jinja template of this weaver with ``ctx`` (as
+        ``DesignCtx.render``); ``add_item``, ``add_field`` and slot code attribute the
+        result to the template."""
+        return _render(template, self._templates, _site=call_site(), **ctx)
 
     def add_registration(self, reg: Any) -> None:
         self.woven.registrations.append(reg)
@@ -269,6 +278,10 @@ class WeaveCtx:
         loc = SrcLoc(o.file, o.line) if o and o.file else None
         prefix = "%s on %s: " % (o.contributor, self.cls.qname) if o else ""
         return SvWeaveError([Diag(Severity.ERROR, prefix + msg, loc)])
+
+
+def _for_text(origin: Optional[Origin], text) -> Optional[Origin]:
+    return origin.for_text(text) if origin is not None else None
 
 
 def _arg_name(decl: str) -> str:

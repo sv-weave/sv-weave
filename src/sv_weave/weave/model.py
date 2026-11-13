@@ -21,11 +21,22 @@ class Origin:
     ext_set: Optional[str]            # None for bindings and the framework
     file: str = ""
     line: int = 0
+    py_file: str = ""                 # text from a template: the Python call of render()
+    py_line: int = 0
 
     def __str__(self):
         where = " at %s:%d" % (self.file, self.line) if self.file else ""
+        if self.py_file:
+            where += " (rendered at %s:%d)" % (self.py_file, self.py_line)
         what = self.contributor + ("[%s]" % self.ext_set if self.ext_set else "")
         return what + where
+
+    def for_text(self, text) -> "Origin":
+        """This origin, moved to the template ``text`` was rendered from (if any)."""
+        tpl = getattr(text, "template", "")
+        if not tpl:
+            return self
+        return dc.replace(self, file=tpl, line=1, py_file=text.py_file, py_line=text.py_line)
 
     @property
     def key(self) -> Tuple[str, Optional[str]]:
@@ -96,6 +107,8 @@ class Contributions:
         origin = self._owner._origin()
         key = origin.key if origin else ("", None)
         d_before, d_after = self._owner._relations(key)
+        if origin is not None:
+            origin = origin.for_text(text)
         self._entries.append(_Entry(SvFragment(text, origin), key, bool(first),
                                     tuple(d_before) + tuple(before),
                                     tuple(d_after) + tuple(after)))

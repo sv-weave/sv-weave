@@ -22,6 +22,7 @@ from ..diag import Diag, Severity, SrcLoc, SvWeaveError
 from ..frontend.model import SvClass
 from .ctx import WeaveCtx, WovenClassBuilder
 from .model import Origin, SvFragment, call_site
+from .templates import SvText, render as _render
 
 GEN_PKG = "sv_weave_gen_pkg"
 
@@ -39,7 +40,8 @@ class DesignCtx:
     def __init__(self, model, profile: str, ext_set: str, options: Dict[str, Any],
                  weaver: str, builders: Dict[int, WovenClassBuilder], bindings: Dict[str, Any],
                  aggregates: Dict[str, Aggregate], diags: List[Diag],
-                 files: Optional[Dict[str, SvFragment]] = None):
+                 files: Optional[Dict[str, SvFragment]] = None,
+                 templates: Sequence[str] = ()):
         self.model = model
         self.profile = profile
         self.ext_set = ext_set
@@ -51,6 +53,7 @@ class DesignCtx:
         self._diags = diags
         self._files = {} if files is None else files
         self._touched: List[WovenClassBuilder] = []
+        self._templates = tuple(templates)
 
     # -- woven classes ---------------------------------------------------------------
     def woven(self, cls: SvClass):
@@ -69,7 +72,7 @@ class DesignCtx:
             if rel[0] or rel[1]:
                 b.relations[(self._weaver, self.ext_set)] = rel
             self._touched.append(b)
-        return WeaveCtx(b, self.ext_set, self.options)
+        return WeaveCtx(b, self.ext_set, self.options, self._templates)
 
     def feature_of(self, cls: SvClass, name: str):
         return self._ctx_for(cls).feature(name)
@@ -89,9 +92,17 @@ class DesignCtx:
     def _agg(self, pkg: str) -> Aggregate:
         return self._aggregates.setdefault(pkg, Aggregate())
 
-    def _origin(self) -> Origin:
+    def _origin(self, text: str = "") -> Origin:
         f, l = call_site()
-        return Origin(self._weaver, self.ext_set, f, l)
+        return Origin(self._weaver, self.ext_set, f, l).for_text(text)
+
+    # -- templates ---------------------------------------------------------------------
+    def render(self, template: str, /, **ctx) -> SvText:
+        """Renders a Jinja template of this weaver (``templates/`` next to its module,
+        or its ``templates`` attribute) with ``ctx``. The result is a ``str`` that
+        ``add_item`` and ``add_file`` attribute to the template. Needs
+        ``sv-weave[templates]``."""
+        return _render(template, self._templates, _site=call_site(), **ctx)
 
     def add_item(self, pkg: str, text: str, imports: Sequence[str] = (),
                  uses_woven: Sequence[str] = ()) -> None:
@@ -101,7 +112,7 @@ class DesignCtx:
         a = self._agg(pkg)
         if any(f.text == text for f in a.items):
             return
-        a.items.append(SvFragment(text, self._origin()))
+        a.items.append(SvFragment(text, self._origin(text)))
         for i in imports:
             if i != pkg and i not in a.imports:
                 a.imports.append(i)
@@ -132,7 +143,7 @@ class DesignCtx:
                                   "text" % (name, prev.origin.contributor
                                             if prev.origin is not None else "?"))
             return
-        self._files[name] = SvFragment(text, self._origin())
+        self._files[name] = SvFragment(text, self._origin(text))
 
     # -- diagnostics -----------------------------------------------------------------
     def warning(self, msg: str, loc: Optional[SrcLoc] = None):

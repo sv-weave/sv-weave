@@ -269,6 +269,61 @@ profile, after every per-class handler and before the bindings' ``finalize``.
     The binding whose root ``cls`` derives from; ``binding.create_expr(cls, inst)``
     gives an expression that creates it through that binding's factory.
 
+Templates
+---------
+
+A weaver whose text is mostly literal SV can keep it in Jinja templates instead of
+Python strings. ``d.render(template, **ctx)`` (and ``w.render(...)`` in a per-class
+handler) renders a template of the weaver and returns its text:
+
+.. code-block:: python
+
+    class MyWeaver(Weaver):
+        name = "my"
+        # templates = "templates"     # the default: <dir of this module>/templates
+
+        def design(self, d):
+            for b in bundles(d.model):
+                d.add_file("%s_xtor.sv" % b.name, d.render("xtor.sv.j2", b=BundleView(b)))
+
+.. code-block:: jinja
+
+    // {{ b.name }}: the pins of one link
+    module {{ b.name }}_xtor (
+    {% for p in b.ports %}
+        {{ p }}
+    {% endfor %}
+    );
+    endmodule
+
+Install the extra: ``pip install 'sv-weave[templates]'`` (Jinja 3.1; it is imported on
+the first ``render``). sv-weave owns the environment, one per template directory:
+
+- ``trim_blocks`` and ``lstrip_blocks``: a line holding only a block tag
+  (``{% for %}``, ``{% if %}``) leaves nothing in the output; indent tags freely.
+- ``keep_trailing_newline``.
+- ``StrictUndefined``: a name or attribute the context lacks is an error that names
+  the template line, not an empty string.
+- No autoescape: ``<`` and ``&`` are SV, not HTML.
+
+The templates are found in ``templates/`` next to the module that defines the
+weaver class, or in the directories its ``templates`` attribute names (a string or a
+list, relative to that module). Ship them as package data. Template files ending in
+``.j2`` or ``.jinja`` count towards the weaver's source fingerprint, so editing one
+re-runs the weave.
+
+``render`` returns an ``SvText``: a ``str`` that also records the template file and
+the Python call of ``render``. ``add_item``, ``add_file``, ``add_field``,
+``w.add_item`` and slot code (``slot.body.add(...)``) read it, so the line map of the
+woven code, and so every diagnostic verify reports in it, names the template (and,
+in brackets, the ``render`` call). Text derived from an ``SvText`` (``+``,
+``.strip()``, ``"\n".join(...)``) is a plain ``str`` again and maps to the Python call
+that adds it.
+
+Keep templates to loops, conditions and substitutions. Build lists, joins and
+expressions in Python, in a small view object passed as context, and write
+``{{ v.conns|join(", ") }}`` rather than ``{% for %}`` with ``loop.last`` on one line.
+
 The worked example is ``examples/selector/``: a weaver that makes the concrete
 subclasses of a base selectable at random. It is an example, not a built-in: sv-weave
 keeps no type registry of its own, and works with the class library's (for UVM,

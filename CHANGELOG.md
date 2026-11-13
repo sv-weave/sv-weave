@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+Added:
+
+- Jinja templates for weaver text: `DesignCtx.render(template, **ctx)` and
+  `WeaveCtx.render(...)` return an `SvText` (a `str` that remembers its template and
+  the Python call). `add_item`, `add_file`, `add_field`, class items and slot code
+  attribute it to the template, so the line map and verify diagnostics name the
+  template file. Templates live in `templates/` next to the weaver's module (or its
+  `templates` attribute). Fixed environment: `trim_blocks`, `lstrip_blocks`,
+  `keep_trailing_newline`, `StrictUndefined`, no autoescape. Jinja is an optional
+  extra, `sv-weave[templates]` (`jinja2>=3.1,<3.2`), imported on first use.
+- `Origin.py_file`, `Origin.py_line`: for text from a template, the `render` call.
+- A plugin's source fingerprint also covers its `.j2` / `.jinja` templates.
+
 ## 0.2.0
 
 Contribution API 0.2. The default plugin range (`Weaver.api`, `Binding.api`) moves

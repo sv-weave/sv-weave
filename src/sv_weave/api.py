@@ -9,6 +9,7 @@ from .__version__ import __version__
 from .api_version import API_VERSION
 from .frontend.decl import (SvDecl, SvDeclArg, SvDeclMember, SvDeclMethod,
                             SvDeclProperty, SvDeclTypedef)
+from .weave.templates import SvText
 
 __all__ = ["API_VERSION", "__version__", "SvDecl", "SvDeclArg", "SvDeclMember",
-           "SvDeclMethod", "SvDeclProperty", "SvDeclTypedef"]
+           "SvDeclMethod", "SvDeclProperty", "SvDeclTypedef", "SvText"]

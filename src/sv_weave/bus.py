@@ -18,6 +18,7 @@ from .match import Pred, parse
 from .plugin import Weaver
 from .weave.ctx import WeaveCtx, WovenClassBuilder
 from .weave.model import WovenClass, WovenPackage
+from .weave.templates import template_dirs
 
 
 @dc.dataclass
@@ -31,6 +32,7 @@ class Subscription:
     options: Dict[str, Any]
     before: tuple = ()
     after: tuple = ()
+    templates: tuple = ()               # the weaver's template directories
 
 
 @dc.dataclass
@@ -57,14 +59,15 @@ class Bus:
         if a.match is not None:
             pred = (pred & a.match) if isinstance(pred, Pred) else _and(pred, a.match)
         self.subs.append(Subscription(a.weaver.name, a.ext_set, a.order, self._next(),
-                                      pred, handler, a.weaver.options, a.before, a.after))
+                                      pred, handler, a.weaver.options, a.before, a.after,
+                                      template_dirs(a.weaver)))
 
     def on_design(self, handler: Callable[[Any], None]) -> None:
         """Calls ``handler(d)`` once per profile, after all per-class handlers (§6.7)."""
         a = self._require_active("on_design")
         self.design_subs.append(Subscription(a.weaver.name, a.ext_set, a.order, self._next(),
                                              lambda c: True, handler, a.weaver.options,
-                                             a.before, a.after))
+                                             a.before, a.after, template_dirs(a.weaver)))
 
     def _next(self) -> int:
         self._seq += 1
@@ -121,12 +124,13 @@ class Bus:
                     if s.ext_set not in sets or not s.pred(t.cls):
                         continue
                     with b.contributor(s.weaver, s.ext_set, s.before, s.after):
-                        _call(s.handler, WeaveCtx(b, s.ext_set, s.options), s.weaver, t, diags)
+                        _call(s.handler, WeaveCtx(b, s.ext_set, s.options, s.templates),
+                              s.weaver, t, diags)
             for s in dsubs:
                 if s.ext_set not in sets:
                     continue
                 d = DesignCtx(model, profile, s.ext_set, s.options, s.weaver, builders,
-                              bindings, aggregates, diags, files)
+                              bindings, aggregates, diags, files, s.templates)
                 d._relations = (s.before, s.after)
                 try:
                     _call(s.handler, d, s.weaver, None, diags)
