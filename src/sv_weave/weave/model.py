@@ -67,6 +67,29 @@ class SvFragment:
         text = textwrap.dedent(self.text).strip("\n")
         return text.split("\n") if text else []
 
+    def spans(self) -> List[Tuple[int, int, Optional[Origin]]]:
+        """``(first, last, origin)`` runs over ``lines()`` (0-based, inclusive). One run
+        for plain text; for text rendered from a template (``SvText`` with a line map),
+        one run per template line, the origin's line being that template line."""
+        n = len(self.lines())
+        tl = getattr(self.text, "tlines", ())
+        o = self.origin
+        if not n:
+            return []
+        if not tl or o is None or o.file != getattr(self.text, "template", None):
+            return [(0, n - 1, o)]
+        # lines() drops the leading blank lines of the dedented text: skip their entries
+        d = textwrap.dedent(self.text)
+        skip = len(d) - len(d.lstrip("\n"))
+        runs: List[List[int]] = []
+        for i in range(n):
+            t = tl[min(skip + i, len(tl) - 1)]
+            if runs and runs[-1][2] == t:
+                runs[-1][1] = i
+            else:
+                runs.append([i, i, t])
+        return [(a, b, dc.replace(o, line=t)) for a, b, t in runs]
+
 
 @dc.dataclass
 class _Entry:

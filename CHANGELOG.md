@@ -13,6 +13,11 @@ Added:
   `keep_trailing_newline`, `StrictUndefined`, no autoescape. Jinja is an optional
   extra, `sv-weave[templates]` (`jinja2>=3.1,<3.2`), imported on first use.
 - `Origin.py_file`, `Origin.py_line`: for text from a template, the `render` call.
+- Line map per template line: text from a template maps each woven line to the
+  template line it came from (`SvText.tlines`; one `LineSpan` per run of lines from
+  one template line), so a verify diagnostic names `<template>:<line>`. Static text
+  maps exactly; a line built in a loop maps to the loop body's line. Reads Jinja 3.1
+  internals; falls back to the whole text at template line 1 if they change.
 - A plugin's source fingerprint also covers its `.j2` / `.jinja` templates.
 
 ## 0.2.0

@@ -1,7 +1,8 @@
 """Stage 6, Render: the woven model as SV text, with a line map (design §7.1).
 
 The line map holds one entry per contributed fragment: the 1-based first and last
-woven line it occupies, and its ``Origin``. Verify uses it to point a diagnostic in the
+woven line it occupies, and its ``Origin``; for text rendered from a template, one
+entry per run of lines from one template line. Verify uses it to point a diagnostic in the
 woven code back at the weaver that produced it.
 """
 import dataclasses as dc
@@ -48,8 +49,12 @@ class Emitter:
         first = len(self.lines) + 1
         for ln in frag.lines():
             self.line(ln.rstrip())
-        if frag.origin is not None and len(self.lines) >= first:
-            self.spans.append(LineSpan(first, len(self.lines), frag.origin))
+        if frag.origin is None or len(self.lines) < first:
+            return
+        # One span per run of the fragment: the whole fragment, or (text from a
+        # template) each run of lines from one template line.
+        for a, b, o in frag.spans():
+            self.spans.append(LineSpan(first + a, first + b, o))
 
     def indent(self):
         self.level += 1

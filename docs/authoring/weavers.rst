@@ -315,8 +315,11 @@ re-runs the weave.
 ``render`` returns an ``SvText``: a ``str`` that also records the template file and
 the Python call of ``render``. ``add_item``, ``add_file``, ``add_field``,
 ``w.add_item`` and slot code (``slot.body.add(...)``) read it, so the line map of the
-woven code, and so every diagnostic verify reports in it, names the template (and,
-in brackets, the ``render`` call). Text derived from an ``SvText`` (``+``,
+woven code, and so every diagnostic verify reports in it, names the template line
+(and, in brackets, the ``render`` call): ``xtor.sv.j2:12: error: expected ';' [woven
+code .../my_xtor.sv:80, from my[core] at xtor.sv.j2:12 (rendered at
+my_weaver.py:41)]``. Static template text maps to its own line; a line produced
+inside a ``{% for %}`` maps to the line of the loop body that produced it. Text derived from an ``SvText`` (``+``,
 ``.strip()``, ``"\n".join(...)``) is a plain ``str`` again and maps to the Python call
 that adds it.
 

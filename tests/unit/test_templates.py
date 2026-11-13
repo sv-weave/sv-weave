@@ -146,7 +146,8 @@ def test_add_item_origin_is_template(design_weaver, tdir):
     n = next(i for i, l in enumerate(lines, 1) if "__w_t;" in l)
     o = rf.origin_at(n)
     assert o.contributor == "t_tpl"
-    assert (o.file, o.line) == (os.path.join(str(tdir), "item.sv.j2"), 1)
+    assert (o.file, o.line) == (os.path.join(str(tdir), "item.sv.j2"), 2)
+    assert rf.origin_at(n - 1).line == 1                    # the comment
     assert o.py_file == HERE and o.py_line > 0
     assert "rendered at %s:" % HERE in str(o)
     plain = rf.origin_at(next(i for i, l in enumerate(lines, 1) if "__w_plain" in l))
@@ -166,7 +167,7 @@ def test_add_file_error_names_template(design_weaver, tdir):
     with pytest.raises(SvWeaveError) as e:
         weave("t_tpl")
     d = next(x for x in e.value.diags if "w_bad.sv" in x.msg)
-    assert d.loc.file.endswith("bad.sv.j2")
+    assert d.loc.file.endswith("bad.sv.j2") and d.loc.line == 2      # the line, not 1
     assert "rendered at" in d.msg
 
 
@@ -199,3 +200,62 @@ def test_class_item_and_field_from_template(tdir):
         n = next(i for i, l in enumerate(lines, 1) if marker in l)
         o = rf.origin_at(n)
         assert o.file.endswith(tpl) and o.line == 1 and o.py_file == HERE, (marker, o)
+
+
+# -- per-line map ----------------------------------------------------------------------------
+LOOP = """
+    // header {{ name }}
+    class {{ name }};
+    {% for f in fields %}
+        int {{ f }};
+    {% endfor %}
+    {% if extra %}
+
+        int {{ extra }}; // extra
+    {% endif %}
+        {{ tail }} x;
+    endclass
+    """
+
+
+def test_render_line_map(tdir):
+    _write(tdir, "loop.sv.j2", LOOP)
+    t = render("loop.sv.j2", [str(tdir)], name="c", fields=["a", "b", "c"], extra="e",
+               tail="int")
+    lines = t.split("\n")
+    assert len(t.tlines) == len(lines)
+    # output line -> template line
+    want = {"// header c": 1, "class c;": 2, "int a;": 4, "int b;": 4, "int c;": 4,
+            "": 7, "int e; // extra": 8, "int x;": 10, "endclass": 11}
+    for l, tl in zip(lines[:-1], t.tlines):                 # not the final ""
+        if l.strip() in want:
+            assert tl == want[l.strip()], (l, tl)
+
+
+def test_render_line_map_fallback(tdir, monkeypatch):
+    _write(tdir, "loop.sv.j2", LOOP)
+    monkeypatch.setattr(templates, "_line_info", lambda t: 1 / 0)
+    t = render("loop.sv.j2", [str(tdir)], name="c", fields=["a"], extra="", tail="int")
+    assert t.tlines == () and "int a;" in t
+
+
+def test_line_map_in_woven_code(design_weaver, tdir):
+    (tdir / "item.sv.j2").write_text("\n\n" + textwrap.dedent(LOOP).lstrip("\n"))
+
+    def fn(d):
+        d.add_item("pa", d.render("item.sv.j2", name="__w_c", fields=["a", "b"], extra="",
+                                  tail="int"))
+    design_weaver(fn)
+    rf = weave("t_tpl").file("pa_woven.sv")
+    lines = rf.text.splitlines()
+    # the template's two leading blank lines are dropped from the woven code; the map
+    # still counts them
+    for marker, tl in (("header __w_c", 3), ("class __w_c;", 4), ("int a;", 6),
+                       ("int b;", 6), ("int x;", 12), ("endclass", 13)):
+        n = next(i for i, l in enumerate(lines, 1) if marker in l)
+        o = rf.origin_at(n)
+        assert o.file.endswith("item.sv.j2") and o.line == tl, (marker, o)
+    # one span per run of lines from one template line
+    spans = [s for s in rf.line_map if s.origin.file.endswith("item.sv.j2")]
+    assert [s.origin.line for s in spans] == [3, 4, 6, 12, 13]
+    assert spans[2].last - spans[2].first == 1          # int a; int b;
