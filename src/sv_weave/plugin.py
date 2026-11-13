@@ -6,7 +6,7 @@ Plugins are found through the entry-point groups ``sv_weave.weavers`` and
 entry point of the same name.
 
 Each plugin declares the contribution-API range it works with (``api``, for example
-``">=0.2,<0.3"``). A plugin whose range excludes ``API_VERSION`` is refused at load time.
+``">=0.3,<0.4"``). A plugin whose range excludes ``API_VERSION`` is refused at load time.
 """
 import dataclasses as dc
 import hashlib
@@ -32,7 +32,7 @@ class Weaver:
     content must precede / follow, in every method section it contributes to; a config
     entry's ``before`` / ``after`` add to them."""
     name: str = ""
-    api: str = ">=0.2,<0.3"
+    api: str = ">=0.3,<0.4"
     version: str = "0"
     order: int = 0
     before: Sequence[str] = ()
@@ -76,7 +76,7 @@ class FeatureSpec:
 class Binding:
     """Base class for bindings: one class library or factory (design §2, §8.3)."""
     name: str = ""
-    api: str = ">=0.2,<0.3"
+    api: str = ">=0.3,<0.4"
     version: str = "0"
     roots: Sequence[str] = ()
 
@@ -218,7 +218,7 @@ def _pad(a: Tuple[int, ...], b: Tuple[int, ...]):
 
 
 def api_compatible(spec: str, version: Tuple[int, ...] = API_VERSION) -> bool:
-    """True if ``version`` satisfies a range such as ``">=0.2,<0.3"``."""
+    """True if ``version`` satisfies a range such as ``">=0.3,<0.4"``."""
     for part in spec.split(","):
         m = _CMP.match(part)
         if m is None:

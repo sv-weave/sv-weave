@@ -29,7 +29,7 @@ def test_incompatible_weaver_refused():
         api = ">=1.0"
     plugin.register_weaver(Future)
     try:
-        with pytest.raises(SvWeaveError, match="needs sv-weave API >=1.0, but this sv-weave provides 0.2"):
+        with pytest.raises(SvWeaveError, match="needs sv-weave API >=1.0, but this sv-weave provides 0.3"):
             plugin.find(plugin.WEAVER_GROUP, "t_future")
     finally:
         plugin.unregister("t_future")

@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+Contribution API 0.3. The default plugin range (`Weaver.api`, `Binding.api`) moves
+to `">=0.3,<0.4"`; a plugin that declares `">=0.2,<0.3"` is refused until it widens
+its range (0.3 only adds to 0.2).
 
 Added:
 

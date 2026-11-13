@@ -11,7 +11,7 @@ never depend on a binding directly; they contribute to its features.
 
     class MyBinding(plugin.Binding):
         name = "mylib"
-        api = ">=0.2,<0.3"
+        api = ">=0.3,<0.4"
         roots = ("my_pkg::my_object",)
 
         def imports(self): return ["my_pkg"]

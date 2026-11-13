@@ -15,7 +15,7 @@ A minimal weaver
 
     class TraceBuild(plugin.Weaver):
         name = "trace-build"
-        api = ">=0.2,<0.3"
+        api = ">=0.3,<0.4"
 
         def subscribe(self, bus):
             bus.on(has_method("build"), self.weave)
