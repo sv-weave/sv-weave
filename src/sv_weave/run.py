@@ -29,6 +29,7 @@ from .write import MANIFEST, write_if_changed, write_outputs
 REPORT = "weave-report.md"
 WOVEN_FILELIST = "sv_weave.f"
 RUNTIME_FILELIST = "sv_weave_rt.f"
+PRE_FILELIST = "sv_weave_pre.f"          # syntax pre-pass sources (compile before the user's)
 
 
 @dc.dataclass
@@ -45,6 +46,7 @@ class RunResult:
     runtime_files: List[str] = dc.field(default_factory=list)
     generated_names: List[str] = dc.field(default_factory=list)
     compile_order: List[str] = dc.field(default_factory=list)
+    pre_files: List[str] = dc.field(default_factory=list)    # on_syntax sources, in order
     changed: List[str] = dc.field(default_factory=list)
     diags: List[Diag] = dc.field(default_factory=list)
     plugin_versions: Dict[str, str] = dc.field(default_factory=dict)
@@ -237,8 +239,30 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
                 "from another sv-weave run; two init packages cannot share an image. Set "
                 "'init: false' on each Weave and add one svweave.Init after them" % prior,
                 SrcLoc(prior, 1))])
+    pre_texts: List[Tuple[str, str]] = []
+
+    def pre(trees, sm):
+        added, diags = bus.run_syntax(trees, sm)
+        res.diags = _dedup(res.diags + diags)
+        _stop(res.diags, "weaving (on_syntax) failed")
+        reserved = {WOVEN_FILELIST, RUNTIME_FILELIST, PRE_FILELIST, MANIFEST, REPORT}
+        clash = sorted(n for n, _, _ in added if n in reserved)
+        if clash:
+            _stop([Diag(Severity.ERROR, "add_source: %s clash with a file sv-weave writes"
+                        % ", ".join(clash))], "weaving (on_syntax) failed")
+        pre_texts.extend((n, t) for n, t, _ in added)
+        return [(os.path.join(out_dir, n), t) for n, t in pre_texts]
+
     with _Timer(res, "load"):
-        res.loaded = load(full, load_texts)
+        try:
+            res.loaded = load(full, load_texts, pre if bus.syntax_subs else None)
+        except SvWeaveError:
+            # Errors may be in the added sources: write them where the diagnostics point.
+            if write:
+                for n, t in pre_texts:
+                    write_if_changed(os.path.join(out_dir, n), t)
+            raise
+    res.pre_files = [n for n, _ in pre_texts]
     with _Timer(res, "model"):
         res.model = build_model(res.loaded)
 
@@ -330,8 +354,8 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
     # 6. Render.
     res.rendered = [render_package(wp) for wp in res.packages]
     # Weaver files (DesignCtx.add_file) must not take a name sv-weave writes itself.
-    taken = {r.name for r in res.rendered} | set(res.extra_files) | {
-        WOVEN_FILELIST, RUNTIME_FILELIST, MANIFEST, REPORT}
+    taken = {r.name for r in res.rendered} | set(res.extra_files) | set(res.pre_files) | {
+        PRE_FILELIST, WOVEN_FILELIST, RUNTIME_FILELIST, MANIFEST, REPORT}
     clash = sorted(n for n in wfiles if n in taken)
     if clash:
         res.diags.append(Diag(Severity.ERROR, "add_file: %s clash%s with a file sv-weave "
@@ -347,7 +371,7 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
     inits = [(n, res.extra_files[n]) for n in INIT_FILES if n in res.extra_files]
     gen = ([(r.name, r.text) for r in res.rendered if r not in file_rendered] + extras
            + inits + [(r.name, r.text) for r in file_rendered])
-    res.output_hash = _hash(gen)
+    res.output_hash = _hash(pre_texts + gen)
     res.compile_order = [name for name, _ in gen]
 
     # 7. Verify.
@@ -373,6 +397,9 @@ def run(cfg: Config, spec: Optional[SourceSpec] = None, texts: Sequence[Tuple[st
 
     # 8. Write.
     files = dict(gen)
+    if pre_texts:
+        files.update(pre_texts)
+        files[PRE_FILELIST] = "".join(os.path.join(out_dir, n) + "\n" for n in res.pre_files)
     files[WOVEN_FILELIST] = "".join(os.path.join(out_dir, n) + "\n" for n in res.compile_order)
     files[RUNTIME_FILELIST] = "".join(f + "\n" for f in rt)
     res.generated_names = list(files) + [MANIFEST, REPORT]

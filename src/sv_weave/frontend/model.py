@@ -18,6 +18,8 @@ from ..diag import Diag, Severity, SrcLoc, SvWeaveError
 from .loader import Loaded, slang_loc
 from .types import SvType, TypeConverter, VOID
 
+_UNSET = object()     # cache sentinel where None is a valid result
+
 SK = A.SymbolKind
 
 
@@ -96,8 +98,38 @@ class SvMethod:
     loc: Optional[SrcLoc]
     slang: Any = dc.field(default=None, repr=False)
 
+    _rw: Any = dc.field(default=None, init=False, repr=False)
+    _stmt_rw: Any = dc.field(default=_UNSET, init=False, repr=False)
+
     def __repr__(self):
         return "SvMethod(%s::%s)" % (self.owner.qname, self.name)
+
+    @property
+    def rw(self):
+        """Read/write sets of the body as member paths (``analysis.rw.RwSets``);
+        computed on first use and cached."""
+        if self._rw is None:
+            from ..analysis.rw import analyze
+            self._rw = analyze(self.slang)
+        return self._rw
+
+    @property
+    def stmt_rw(self):
+        """Read/write sets of each top-level statement of the body
+        (``analysis.rw.analyze_stmts``); None if the body declares a local.
+        Computed on first use and cached."""
+        if self._stmt_rw is _UNSET:
+            from ..analysis.rw import analyze_stmts
+            self._stmt_rw = analyze_stmts(self.slang)
+        return self._stmt_rw
+
+    @property
+    def reads(self):
+        return self.rw.reads
+
+    @property
+    def writes(self):
+        return self.rw.writes
 
 
 @dc.dataclass(eq=False)

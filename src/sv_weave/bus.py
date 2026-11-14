@@ -49,6 +49,7 @@ class Bus:
     def __init__(self):
         self.subs: List[Subscription] = []
         self.design_subs: List[Subscription] = []
+        self.syntax_subs: List[Subscription] = []
         self._active: Optional[_Active] = None
         self._seq = 0
 
@@ -66,6 +67,14 @@ class Bus:
         """Calls ``handler(d)`` once per profile, after all per-class handlers (§6.7)."""
         a = self._require_active("on_design")
         self.design_subs.append(Subscription(a.weaver.name, a.ext_set, a.order, self._next(),
+                                             lambda c: True, handler, a.weaver.options,
+                                             a.before, a.after, template_dirs(a.weaver)))
+
+    def on_syntax(self, handler: Callable[[Any], None]) -> None:
+        """Calls ``handler(s)`` once, with a ``SyntaxCtx``, on the parsed sources before
+        elaboration; ``s.add_source`` adds generated text the sources may name."""
+        a = self._require_active("on_syntax")
+        self.syntax_subs.append(Subscription(a.weaver.name, a.ext_set, a.order, self._next(),
                                              lambda c: True, handler, a.weaver.options,
                                              a.before, a.after, template_dirs(a.weaver)))
 
@@ -89,6 +98,17 @@ class Bus:
             weaver.subscribe(self)
         finally:
             self._active = None
+
+    def run_syntax(self, trees, sm) -> "tuple":
+        """Runs the ``on_syntax`` handlers, by order, then weaver name. Returns the added
+        sources as ``[(name, text, weaver)]`` and the diagnostics."""
+        from .frontend.syntax import SyntaxCtx
+        added: List = []
+        diags: List[Diag] = []
+        for s in sorted(self.syntax_subs, key=lambda s: (s.order, s.weaver, s.seq)):
+            _call(s.handler, SyntaxCtx(trees, sm, s.weaver, s.options, added),
+                  "weaver '%s' (on_syntax)" % s.weaver, None, diags)
+        return added, diags
 
     def ordered(self) -> List[Subscription]:
         return sorted(self.subs, key=lambda s: (s.order, s.weaver, s.seq))

@@ -6,7 +6,7 @@ Any error-severity diagnostic stops the run.
 """
 import dataclasses as dc
 import os
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 import pyslang
 from pyslang import ast as A
@@ -28,6 +28,8 @@ class Loaded:
     # The tree of spec.files (None without files), and the in-memory (name, tree) pairs.
     file_tree: Optional[S.SyntaxTree] = None
     text_trees: List[Tuple[str, S.SyntaxTree]] = dc.field(default_factory=list)
+    # The (path, tree) pairs of text a syntax pre-pass added (``load(pre=)``).
+    pre_trees: List[Tuple[str, S.SyntaxTree]] = dc.field(default_factory=list)
     bag: Optional[pyslang.Bag] = None
 
     def loc(self, sloc) -> Optional[SrcLoc]:
@@ -69,8 +71,13 @@ def convert_diags(sm: pyslang.SourceManager, diags) -> List[Diag]:
 
 
 def load(spec: SourceSpec,
-         texts: Sequence[Tuple[str, str]] = ()) -> Loaded:
+         texts: Sequence[Tuple[str, str]] = (),
+         pre: Optional[Callable] = None) -> Loaded:
     """Parse ``spec.files`` (plus in-memory ``(name, text)`` pairs, used by tests).
+
+    ``pre(trees, source_manager)``, if given, runs on the parsed trees before
+    elaboration and returns ``(path, text)`` pairs; they are parsed and elaborated
+    ahead of the sources (the syntax pre-pass, ``frontend/syntax.py``).
 
     Raises SvWeaveError with every error diagnostic if the design does not
     elaborate cleanly.
@@ -96,6 +103,13 @@ def load(spec: SourceSpec,
     if not trees:
         raise error("no SystemVerilog sources given")
 
+    pre_trees = []
+    if pre is not None:
+        for path, text in pre(list(trees), sm):
+            pre_trees.append((path, S.SyntaxTree.fromText(text, sm, os.path.basename(path),
+                                                          path, bag)))
+        trees[:0] = [t for _, t in pre_trees]
+
     comp = A.Compilation(bag)
     for t in trees:
         comp.addSyntaxTree(t)
@@ -106,7 +120,7 @@ def load(spec: SourceSpec,
         raise SvWeaveError(errs, "the input design does not elaborate cleanly")
     return Loaded(comp, trees, sm, root, spec,
                   warnings=[d for d in diags if d.severity != Severity.ERROR],
-                  file_tree=file_tree, text_trees=text_trees, bag=bag)
+                  file_tree=file_tree, text_trees=text_trees, pre_trees=pre_trees, bag=bag)
 
 
 def load_text(*texts: str, name: str = "inline.sv", files: Sequence[str] = ()) -> Loaded:

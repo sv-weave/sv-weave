@@ -59,6 +59,7 @@ def build_manifest(res) -> Dict[str, Any]:
             "runtime": res.runtime_files,
             "generated": res.generated_names,
             "compile_order": res.compile_order,
+            "pre": res.pre_files,
         },
         "diagnostics": [{"severity": d.severity.name.lower(), "msg": d.msg,
                          "loc": str(d.loc) if d.loc else None} for d in res.diags],

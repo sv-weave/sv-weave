@@ -33,6 +33,8 @@ written by hand in every class.
    authoring/weavers
    authoring/bindings
    authoring/verify-rules
+   authoring/analysis
+   authoring/syntax
 
 .. toctree::
    :maxdepth: 2
